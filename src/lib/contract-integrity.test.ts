@@ -24,21 +24,27 @@ describe("Prisma contract artifacts are in sync with the contract source", () =>
     rmSync(outDir, { recursive: true, force: true })
   })
 
-  it("re-emits the committed storage hash", () => {
-    execFileSync("pnpm", ["prisma", "contract", "emit", "--output-path", outDir], {
-      cwd: REPO_ROOT,
-      stdio: "ignore",
-    })
+  it(
+    "re-emits the committed storage hash",
+    () => {
+      execFileSync("pnpm", ["prisma", "contract", "emit", "--output-path", outDir], {
+        cwd: REPO_ROOT,
+        stdio: "ignore",
+      })
 
-    const emitted = JSON.parse(
-      readFileSync(join(outDir, "contract.json"), "utf8"),
-    ) as { storage: { storageHash: string } }
-    const committed = JSON.parse(readPrismaFile("contract.json")) as {
-      storage: { storageHash: string }
-    }
+      const emitted = JSON.parse(
+        readFileSync(join(outDir, "contract.json"), "utf8"),
+      ) as { storage: { storageHash: string } }
+      const committed = JSON.parse(readPrismaFile("contract.json")) as {
+        storage: { storageHash: string }
+      }
 
-    expect(emitted.storage.storageHash).toBe(committed.storage.storageHash)
-  })
+      expect(emitted.storage.storageHash).toBe(committed.storage.storageHash)
+    },
+    // Spawns `pnpm prisma contract emit`, which costs ~5s — longer than vitest's 5s default, so this
+    // test failed intermittently depending on machine load. Emitting is I/O bound, not a hang.
+    60_000,
+  )
 
   it("has a contract source file for the artifacts to come from", () => {
     expect(readPrismaFile("contract.prisma").trim().length).toBeGreaterThan(0)

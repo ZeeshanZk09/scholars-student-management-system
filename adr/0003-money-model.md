@@ -28,22 +28,49 @@ each leave the column lying. `RULES.md` §25 already states the design principle
 
 ## Decision
 
-**1. Storage type.** Money columns are `Decimal` (PostgreSQL `numeric`, scale 2). Never `Float`,
-never a JS `number`. Arithmetic goes through the value type below, never through raw column
-arithmetic in a use case.
+**1. Storage type.** Money columns are PostgreSQL `numeric`, declared in the contract as
+`numeric(18,2)`. Never `float`, never a JS `number`. The Prisma 8 `pg/numeric@1` codec supports
+`precision` (1–1000) and `scale` (≥ 0) parameters, and `decimal` is accepted as an alias for the
+same codec.
 
-**2. One shared value type.** `src/shared/money/` exposes a `Money` type that carries both an
-amount and a currency code, and whose arithmetic **throws on currency mismatch**:
+**1a. There is no `Decimal` class in this stack, and the application value is a string.**
+Verified 2026-09-30 by reading the shipped codec in
+`@prisma/orm-target-postgres@8.0.0-rc.12`:
+
+- `pgNumericDecode(wire)` returns the wire value unchanged when it is not a `number` — i.e. a
+  **canonical decimal text string**, not a decimal object.
+- `encodeJson` throws `RUNTIME.ENCODE_FAILED` unless the value is *"an optionally negated decimal
+  numeral, or NaN, Infinity or -Infinity"*. A JS `number` is therefore **not** an acceptable
+  application value for a `numeric` column.
+- The codec exports a `Numeric` *type descriptor*, not a runtime decimal class. There is no
+  `Decimal` export, and neither `decimal.js`, `decimal.js-light`, `bignumber.js` nor
+  `@prisma/client-runtime` is installed in this project.
+
+**Consequence:** exact decimal arithmetic cannot be delegated to the ORM. The application must own
+it, which is what the shared value type below is for.
+
+**2. One shared value type.** `src/shared/money/` exposes a `Money` type backed by **integer minor
+units at a fixed scale of 2**, converted to and from canonical decimal text at the storage
+boundary:
 
 ```text
-Money { amount: Decimal, currency: CurrencyCode }
+Money { amountMinor: bigint, currency: CurrencyCode }
+  money.fromDecimalText("1250.50", "PKR")   -> 125050n minor units
+  money.toDecimalText(m)                     -> "1250.50"
+  money.add/ subtract / compare / allocate   -> exact; throws on currency mismatch
 ```
 
-This is the enforcement mechanism. `RULES.md` §29's requirement is not "be careful with money" but
-"exact decimal values" — a `Money` type makes an impure sum a runtime error rather than a silent
-PKR/USD total. Placing it in `shared/` (rather than per module) is deliberate: `RULES.md` §7.3
+Arithmetic on `bigint` minor units is exact by construction, needs no third-party dependency, and
+round-trips to the canonical text the Prisma codec requires. **Every binary operation throws
+`CurrencyMismatchError` when the two currencies differ.** This is the enforcement mechanism:
+`RULES.md` §29 demands exact decimal values, and a `Money` type makes an impure sum a thrown error
+rather than a silently wrong PKR/USD total. Placing it in `shared/` is deliberate — `RULES.md` §7.3
 restricts `shared/` to genuinely reusable code, and no module may implement its own money
 arithmetic. Two modules disagreeing about rounding is the failure this prevents.
+
+`fromDecimalText` rejects anything the codec would reject, and `toDecimalText` is the *only*
+sanctioned way to produce a value for a `numeric` column, so an invalid amount cannot reach the
+driver.
 
 **3. Currency is explicit, never defaulted.** Every money column carries a `currency` code. There
 is no implicit institution default at the storage layer, because a report spanning two currencies
@@ -56,15 +83,22 @@ unacceptable, the correct fix is a materialized view or cache — never a denorm
 can drift from its inputs.
 
 **5. Totals are non-null and validated.** `amount` and `currency` are required. `discount` and
-`paid` default to `0` (represented as a `Money` zero of the same currency) rather than being
-nullable, removing the null-means-anything ambiguity. Invariants are enforced in the finance
-domain and re-checked as database constraints.
+`paid` default to `0` (a `Money` zero in the same currency) rather than being nullable, removing
+the null-means-anything ambiguity. Invariants are enforced in the finance domain and re-checked as
+database constraints.
 
 **6. Receipt numbers are unique per institution.** Fixed alongside the archived defect G-11.
 
 **7. Every mutation is transactional and audited.** Fee creation, payment recording, discount
 approval and any refund each run in a transaction and write an audit entry with before/after
 `Money` values (`RULES.md` §29, §34).
+
+**8. No new dependency.** `decimal.js` is deliberately **not** added. The arithmetic needed is
+`+`, `-`, comparison and a proportional split, all of which are exact on `bigint` minor units.
+Adding a general-purpose decimal library to avoid a ~120-line exact type would be the kind of
+dependency `RULES.md` §3.5 and the global dependency policy caution against. If a future
+requirement needs transcendental or arbitrary-precision operations, this decision is revisited
+then, not pre-emptively.
 
 ## Consequences
 
@@ -103,7 +137,9 @@ than quietly widened.
 
 | Alternative | Why rejected |
 |---|---|
-| Integer minor units (e.g. paisa) | Exact by construction with no rounding logic, but locks each amount to one currency's scale and makes any currency change a data migration. Worse trade for a single-currency institution. |
+| Integer minor units (e.g. paisa) | Rejected **as a storage choice** for a standalone reason: it locks each amount to one currency's scale and makes any currency change a data migration. It is nonetheless what `Money` uses *in memory*, because the Prisma 8 codec provides no decimal object to compute with. Storage stays `numeric`, so the migration objection does not apply. |
+| Rely on a Prisma `Decimal` class | **Does not exist in this stack.** The `pg/numeric@1` codec returns canonical decimal text and rejects non-text application values. Confirmed 2026-09-30 by reading the shipped codec. |
+| Add `decimal.js` | Unnecessary: `+`, `-`, comparison and proportional split are exact on `bigint` minor units. A general-purpose decimal library is a dependency this domain does not need. |
 | Plain `Decimal` per column, no wrapper | Fewest abstractions, but nothing stops two modules implementing different rounding, and nothing detects mixed-currency sums. Recreates G-10 at a different layer. |
 | Store `outstandingAmount` and reconcile in a job | Recreates G-10: the stored value drifts and a reconciliation pass becomes load-bearing for correctness. |
 | Single system currency with no per-row `currency` | Simplest schema, but makes a mixed-currency report silently wrong instead of loudly impossible. |
