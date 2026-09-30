@@ -801,6 +801,13 @@ that was wrong.) See `skills-inventory.md` for precedence and the duplicate-name
 
 ## 16. Open questions
 
+**Still open:**
+
+4. **Should Node be pinned?** Not decided. No `engines` field or `.nvmrc` exists; CI would
+   float. See §13.
+5. **What replaces the deleted UI components?** `header.tsx` and `user-menu.tsx` were removed
+   ahead of the architecture rebuild.
+
 **Resolved 2026-09-30** (decided and applied, not silently changed):
 
 - ~~Should `package-lock.json` be deleted?~~ **Yes — deleted.** `pnpm-lock.yaml` is the sole
@@ -811,18 +818,16 @@ that was wrong.) See `skills-inventory.md` for precedence and the duplicate-name
 - ~~Should tests be written before features?~~ **Yes — a 5-test foundation now exists** and
   `--passWithNoTests` is gone, so CI cannot go green on an empty suite. See §13.
 
-**Still open:**
+**Decided 2026-09-30 by the user:**
 
-1. **What auth solution?** Deliberately unspecified — nothing is installed, and nothing may be
-   added without approval (`.opencode/ai-workflow.json`).
-2. **Where should the schema backup live permanently?** `/tmp/opencode/contract-backup-*`
-   holds the previous 20-model contract and is not durable.
-3. **Is `src/` going to be committed?** Everything depends on this; until then, deletions are
-   unrecoverable — `contract.prisma` was already truncated twice.
-4. **Should Node be pinned?** Not decided. No `engines` field or `.nvmrc` exists; CI would
-   float. See §13.
-5. **What replaces the deleted UI components?** `header.tsx` and `user-menu.tsx` were removed
-   ahead of the architecture rebuild.
+1. ~~What auth solution?~~ **Deferred to Phase 4**, but the *authorization model* must be derived
+   and written up as an ADR during Phase 1, because it determines the Phase 3 schema. The
+   archived design's competing `User.role` string **and** `Role`/`Permission` tables must be
+   replaced by one coherent model.
+2. ~~Where should the schema backup live?~~ **Keep in `/tmp`, re-verify each session.** Treat it
+   as disposable: check `SHA256SUMS` and re-prove it emits before relying on it. Do not commit it.
+3. ~~Is `src/` going to be committed?~~ **Yes — done.** Committed as `2b520ad` (44 files).
+   `src/` is now fully tracked; deletions are recoverable.
 6. ~~Does the rebuild keep `Class → Group → Section`?~~ **Yes — resolved 2026-09-30.**
    Unanimous across `PRD.md`, `ARCHITECTURE.md`, `RULES.md`, `.opencode/ai-workflow.json` and the
    archived contract: `Institution → AcademicSession → Class → Group → Section → Student`, with
@@ -836,26 +841,27 @@ that was wrong.) See `skills-inventory.md` for precedence and the duplicate-name
 Persistent resume state required by `PHASES.md` §6. Kept here because `MEMORY.md` is the
 project's existing memory mechanism, not a separate file.
 
-**Current phase:** Phase 0 — Development Environment and Repository Baseline
-**Current step:** Step 0.5 — Baseline Documentation
-**Current sub-step:** recording this state; Steps 0.1–0.4 are done
+**Current phase:** Phase 1 — Requirements, Domain and System Modeling
+**Current step:** Steps 1.2 and 1.5
+**Current sub-step:** 1.2 actor modeling (role vs person-type separation); 1.5 extending the
+business rule catalogue with required/optional fields, uniqueness, deletion and archival rules
 
 | Item | State |
 |---|---|
-| Completed | Steps 0.1–0.4; archive verification (§5) |
-| In progress | Step 0.5 baseline documentation |
-| Remaining | Phase 1 (domain modeling), Phase 2 (backend foundation), Phase 3 (schema) onward |
-| Files modified | `MEMORY.md` only — **no `src/`, schema, or config file touched** |
+| Completed | **Phase 0 entirely**; Phase 1.1, 1.3, 1.4 → `DOMAIN-MODEL.md` |
+| In progress | Phase 1.2 actor modeling, 1.5 business rule catalogue |
+| Remaining | Phase 1.2, 1.5, 1.6 (incl. authorization ADR), then Phase 2, Phase 3 onward |
+| Files modified | `MEMORY.md`, `DOMAIN-MODEL.md` — **no `src/`, schema, or config file touched** |
 | Database changes | none |
 | Migration status | no `migrations/` directory exists |
 | Tests passing | 2 files / 5 tests (`pnpm test`) |
 | Tests failing | `pnpm test:e2e` → `Error: No tests found` (no Playwright tests exist yet) |
-| Known issues | `db:verify` returns `CONTRACT.MARKER_MISSING` (intentional — DB unsigned); archived `Attendance` unique constraint never emitted (§5) |
-| Architectural decisions | none newly applied — `Class → Group → Section` confirmed (§16.6) |
-| Blockers | auth solution undecided; `src/` largely untracked |
-| Required user actions | approve auth direction; decide whether to commit `src/`; confirm archive is permanent-safe |
+| Known issues | `db:verify` returns `CONTRACT.MARKER_MISSING` (intentional — DB unsigned) |
+| Architectural decisions | `Class → Group → Section` confirmed (§16.6); academic placement must be per-session history, not inline `Student` FKs (`DOMAIN-MODEL.md` §2); 13 confirmed defects in the archived schema logged as G-1…G-13 (`DOMAIN-MODEL.md` §6) |
+| Blockers | none — auth *mechanism* is deferred to Phase 4 by design |
+| Required user actions | none outstanding |
 | Last verified state | 2026-09-30, all gates re-run (see header) |
-| Exact next action | obtain user decisions on §16.1 (auth) and §16.3 (`src/` tracking), then start **Phase 1 Step 1.3 — Academic Hierarchy Modeling** |
+| Exact next action | finish 1.2 and 1.5, then write the authorization-model ADR in Step 1.6 |
 
 ### Environment snapshot
 
