@@ -553,6 +553,32 @@ dangling import that broke `tsc` even though the source was gone. Fix: `rm -rf .
 
 ## 13. Repository traps
 
+**`pnpm migration:plan` is NOT read-only — it writes `migrations/` (verified 2026-09-30).**
+Running it created `migrations/app/<timestamp>_migration/` and `migrations/snapshots/<hash>/`,
+taking the working tree from 42 to 43 entries. Treat it like `migration:new`, not like
+`db:schema` or `migration:status`, which really are read-only. If you only want to *inspect* the
+planned operations, be ready to `rm -rf migrations` afterwards while the contract is still empty.
+This bit us during Phase 2 Step 2.3 verification; the artifact was removed and the baseline
+restored.
+
+**Migrations are TypeScript, not SQL files.** A Prisma 8 migration directory contains:
+
+```text
+migrations/app/20260930T1708_migration/
+  migration.ts     a `Migration` class — operations are method calls, e.g. this.createSchema(...)
+  ops.json         the resolved operation list
+  migration.json   from/to contract hashes + migrationHash
+migrations/snapshots/<storageHash>/
+  contract.json    the full contract at that point
+  contract.d.ts
+```
+
+So reviewing a migration means reading `migration.ts`, and each migration is snapshotted against a
+`storageHash`. An empty contract plans exactly one additive operation,
+`CREATE SCHEMA IF NOT EXISTS "public"`. Verified database facts: PostgreSQL **17.11**, `public`
+schema already exists, **zero tables**, zero enums, role `user`, and `prisma db schema` masks
+credentials in its output.
+
 **`package-lock.json` was deleted (2026-09-30).** It was an npm lockfile describing an older
 dependency set and it misled `node_modules` about what was declared. The project convention is
 **pnpm** (`pnpm-workspace.yaml` + `packageManager: pnpm@12.6.0`). `pnpm-lock.yaml` is now the
@@ -860,6 +886,7 @@ shipped; remaining 2.3, 2.5, 2.6, 2.7
 | Gates | `pnpm typecheck` clean · `pnpm lint` clean · `pnpm test` 20/20 |
 | Architectural decisions | D-1 authorization = capability RBAC + explicit scope (ADR-0001); D-2 per-session placement; D-3 admission separate from student; D-4 lifecycle vs archival split; D-5 actors split into assigned roles and derived bindings; **D-6 layer boundaries recorded in `src/modules/README.md`** |
 | Blockers | Phase 3 schema blocked on 3 open decisions: Teacher-vs-User shape, money representation, guardian account model (`DOMAIN-MODEL.md` §7) |
+| Step 2.3 verified | Connection works (PG 17.11, `public` exists, 0 tables, 0 enums); migrations are TypeScript classes not SQL; `migration:plan` **writes** — see §13. Remaining: transaction strategy, env config, `db.ts` transaction helper |
 | Required user actions | decide the 3 open questions, or approve the agent to derive them as ADR-0002..0004 |
 | Last verified state | 2026-09-30, `pnpm verify` equivalent run manually (typecheck + lint + test) |
 | Exact next action | Phase 2.6 shared utilities (validation, auth helpers, db helpers) with tests, then 2.5 logging, 2.3 database infrastructure, 2.7 infrastructure tests |
