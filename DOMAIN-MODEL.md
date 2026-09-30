@@ -1,6 +1,6 @@
 # DOMAIN-MODEL.md — Domain Model (PHASES.md Phase 1)
 
-> **Status:** draft under construction — Steps 1.1, 1.3 and 1.4 recorded; Step 1.5 in progress.
+> **Status:** Steps 1.1–1.5 recorded; Step 1.6 in progress (ADR-0001 accepted, 3 decisions open).
 > **Sources:** `PRD.md` (intent), `ARCHITECTURE.md` (intent), `RULES.md` (binding constraints),
 > the archived 20-model contract (prior art, not authority).
 > **Authority order:** `RULES.md` §4 rule hierarchy, then `PHASES.md`, then `PRD.md` /
@@ -27,6 +27,26 @@ Seven user types (`PRD.md` §5). Note that §5.6 and §5.7 explicitly mark Paren
 **Open modelling question (Phase 1.2):** the actor list mixes *roles* (job function) with
 *person types* (parent, student). A parent is simultaneously a role holder and a relation
 (`Student → Parent/Guardian`). These must not be collapsed into one concept.
+
+### 1.1 Actor classification (Step 1.2)
+
+The seven actors are **not** one kind of thing. Splitting them is what makes access revocable.
+
+| Class | Actors | Nature | Assigned or derived? |
+|---|---|---|---|
+| **Job-function roles** | Super Administrator, Administrator, Receptionist / Admission Staff, Teacher, Accountant | A capability bundle applied to an account | **Assigned** — a user may hold several |
+| **Person-type bindings** | Parent / Guardian, Student | A consequence of a domain relationship | **Derived** from data, never assigned |
+
+- A **Parent** is *not* a role someone holds. It exists because a `GuardianLink` row links that
+  person to a student. Revoking the link revokes the access; editing a role string would not.
+- A **Student** exists because a `Student` record is linked to an account. Same reasoning.
+- The two classes are not exclusive. A teacher who is also a parent holds the Teacher *role* and
+  simultaneously has a Guardian *binding*. This is why authorization is a many-to-many
+  (`adr/0001-authorization-model.md`), not a single role column.
+
+`PRD.md` §5.6 and §5.7 mark Parent and Student "future-facing", so the bindings are modelled now
+but are lower build priority than the job-function roles.
+
 
 ---
 
@@ -134,7 +154,7 @@ writes to (`RULES.md` §34).
 
 ---
 
-## 5. Business rules catalogue (Step 1.5 — in progress)
+## 5. Business rules catalogue (Step 1.5)
 
 | # | Rule | Basis | Notes |
 |---|---|---|---|
@@ -150,6 +170,31 @@ writes to (`RULES.md` §34).
 | BR-10 | Audit records capture who / what / when / target / result / context | `RULES.md` §34 | no secrets in logs |
 | BR-11 | Status and type fields are constrained sets, validated at the boundary | `RULES.md` §16 | not free-form strings |
 | BR-12 | Search and filtering are server-side, not client-only | `PRD.md` §23 | |
+
+### 5.1 Entity rules (Step 1.5 — required/optional, uniqueness, deletion, archival)
+
+| Entity | Required | Optional | Uniqueness | Deletion | Archival |
+|---|---|---|---|---|---|
+| Institution | name | code, email, phone, address | code (nullable-unique) | block if any records | status only |
+| Academic Session | institutionId, name | startDate, endDate | (institutionId, name) | block if classes exist | `isCurrent` marks one active per institution |
+| Class | institutionId, academicSessionId, name | gradeLevel | (academicSessionId, name) | block if groups exist | status |
+| Group | classId, name | — | (classId, name) | block if sections exist | status |
+| Section | groupId, name | capacity | (groupId, name) | block if students placed | status |
+| Student | institutionId, firstName, lastName | middleName, dob, gender, contact, image | admissionNumber, (institutionId, admissionNumber) | **soft-delete / deactivate** — never hard delete | lifecycle status + archival flag, kept separate |
+| Academic Placement | studentId, academicSessionId, classId, groupId, sectionId | rollNumber | (studentId, academicSessionId) | immutable once session closes | retained indefinitely |
+| Admission | institutionId, applicant name, status | contact, requested class | admission/application number | block once converted | status history |
+| Guardian | institutionId, firstName, lastName | relationship, contact, occupation | — | block while linked, else soft-delete | status |
+| GuardianLink | guardianId, studentId | relationship, isPrimary, isEmergencyContact | (guardianId, studentId) | deletable — this *is* the access grant | none needed |
+| User | email (unique) | name, image, phone | email | deactivate, do not delete (audit trail) | status |
+| Attendance | studentId, date, academic context, status | markedBy | one per student per session/context — **see G-5** | corrections audited, not deleted | retained |
+| Result | studentId, examinationId, subjectId, obtainedMarks | grade, remarks | (studentId, examinationId, subjectId) | draft deletable; published needs elevated permission | publication state retained |
+| Fee record | studentId, amount, currency, dueDate | discount, fine | per student per structure | refunds, never delete (`RULES.md` §29) | status |
+| Payment | feeRecordId, amount, method, paymentDate | transactionId, receiptNumber, notes | **receiptNumber** — see G-11 | never delete | retained |
+
+**Deletion principle.** Financial and academic records are never hard-deleted
+(`RULES.md` §29, §30, §34). Deletion means status change plus an audit entry. Only genuinely
+transient configuration may be removed.
+
 
 ---
 
@@ -177,14 +222,31 @@ These are confirmed against `PRD.md` / `RULES.md`, in severity order.
 
 ---
 
-## 7. Open questions for Phase 1.6
+## 7. Decisions and open questions (Step 1.6)
 
-1. **Authorization model** — one role per user with code-held capability maps, or role → permission
-   strings checked server-side. To be decided and recorded as an ADR; it determines the schema.
-2. **Money representation** — decimal scale and whether a single shared value type is introduced.
-3. **Admission vs Student identity** — whether an applicant becomes a Student row via promotion
-   (one identity, status change) or via creation (two identities, linked).
-4. **Teacher vs User relationship** — whether a teacher is a `User` with a role, a separate
-   entity, or both, and how teaching assignments are scoped.
-5. **Deleted UI components** (`header.tsx`, `user-menu.tsx`) — what replaces them.
-6. **Node pinning** — no `engines`/`.nvmrc` yet.
+### Decided
+
+| # | Decision | Record |
+|---|---|---|
+| D-1 | Authorization = capability RBAC + explicit resource scope; drop `User.role` string | `adr/0001-authorization-model.md` |
+| D-2 | Academic placement is per-session history, never inline `Student` FKs | §2 above; fixes G-1 |
+| D-3 | Admission is a separate entity from Student; conversion is a transition | §3 above; fixes G-3 |
+| D-4 | Student lifecycle status and archival flag are separate axes | §3 above; fixes G-12 |
+| D-5 | Actor list splits into assigned job-function roles and derived person-type bindings | §1.1 above |
+
+### Still open
+
+1. **Teacher vs User relationship.** ADR-0001 introduces `TeachingAssignment` for scope, but
+   whether a Teacher is a `User` with the Teacher role, a separate entity, or both is undecided.
+   This blocks the teacher half of the Phase 3 schema.
+2. **Money representation.** Decimal scale, currency handling, and whether a single shared money
+   value type is introduced. Blocks fee/payment tables.
+3. **Guardian representation.** One `User` per guardian person, or a `User` per login linked to
+   several `ParentGuardian` records. Affects whether a guardian with two children needs two
+   accounts.
+4. **Deleted UI components** (`header.tsx`, `user-menu.tsx`) — what replaces them.
+5. **Node pinning** — no `engines`/`.nvmrc`, so CI would float.
+6. **`TECH-STACK.md`, `SECURITY.md`, `DESIGN.md`, `PERFORMANCE.md`** were not yet read in full;
+   their constraints are not yet reflected in this model. Phase 1.5/1.6 should be revisited once
+   they are.
+

@@ -842,26 +842,25 @@ Persistent resume state required by `PHASES.md` §6. Kept here because `MEMORY.m
 project's existing memory mechanism, not a separate file.
 
 **Current phase:** Phase 1 — Requirements, Domain and System Modeling
-**Current step:** Steps 1.2 and 1.5
-**Current sub-step:** 1.2 actor modeling (role vs person-type separation); 1.5 extending the
-business rule catalogue with required/optional fields, uniqueness, deletion and archival rules
+**Current step:** Step 1.6 — Domain Decision Documentation
+**Current sub-step:** ADR-0001 accepted; three schema-blocking decisions still open
 
 | Item | State |
 |---|---|
-| Completed | **Phase 0 entirely**; Phase 1.1, 1.3, 1.4 → `DOMAIN-MODEL.md` |
-| In progress | Phase 1.2 actor modeling, 1.5 business rule catalogue |
-| Remaining | Phase 1.2, 1.5, 1.6 (incl. authorization ADR), then Phase 2, Phase 3 onward |
-| Files modified | `MEMORY.md`, `DOMAIN-MODEL.md` — **no `src/`, schema, or config file touched** |
+| Completed | **Phase 0 entirely**; Phase 1.1, 1.2, 1.3, 1.4, 1.5 → `DOMAIN-MODEL.md`; ADR-0001 → `adr/0001-authorization-model.md` |
+| In progress | Phase 1.6 — remaining domain decisions |
+| Remaining | Phase 1.6, then Phase 2 (backend foundation), Phase 3 (schema) onward |
+| Files modified | `MEMORY.md`, `DOMAIN-MODEL.md`, `adr/0001-authorization-model.md` — **no `src/`, schema, or config file touched** |
 | Database changes | none |
 | Migration status | no `migrations/` directory exists |
 | Tests passing | 2 files / 5 tests (`pnpm test`) |
 | Tests failing | `pnpm test:e2e` → `Error: No tests found` (no Playwright tests exist yet) |
 | Known issues | `db:verify` returns `CONTRACT.MARKER_MISSING` (intentional — DB unsigned) |
-| Architectural decisions | `Class → Group → Section` confirmed (§16.6); academic placement must be per-session history, not inline `Student` FKs (`DOMAIN-MODEL.md` §2); 13 confirmed defects in the archived schema logged as G-1…G-13 (`DOMAIN-MODEL.md` §6) |
-| Blockers | none — auth *mechanism* is deferred to Phase 4 by design |
-| Required user actions | none outstanding |
+| Architectural decisions | D-1 authorization = capability RBAC + explicit resource scope, `User.role` string dropped (ADR-0001); D-2 placement is per-session history; D-3 admission separate from student; D-4 lifecycle vs archival are separate axes; D-5 actors split into assigned roles and derived person-type bindings |
+| Blockers | Phase 3 schema is blocked on 3 open decisions: Teacher-vs-User shape, money representation, guardian account model (`DOMAIN-MODEL.md` §7) |
+| Required user actions | decide the 3 open questions, or approve the agent to derive them as ADR-0002..0004 |
 | Last verified state | 2026-09-30, all gates re-run (see header) |
-| Exact next action | finish 1.2 and 1.5, then write the authorization-model ADR in Step 1.6 |
+| Exact next action | resolve the 3 open decisions, close Step 1.6, then begin **Phase 2 Step 2.1 — Backend Boundary Design** |
 
 ### Environment snapshot
 
