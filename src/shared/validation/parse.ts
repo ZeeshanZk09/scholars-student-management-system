@@ -39,7 +39,7 @@ export function toValidationError(error: z.ZodError, subject = "request"): Valid
     }
   }
 
-  return new ValidationError(`Validation failed for ${subject}`, fieldErrors);
+  return new ValidationError(`Validation failed for ${subject}`, fieldErrors satisfies FieldErrors);
 }
 
 export interface ParseResult<T> {
