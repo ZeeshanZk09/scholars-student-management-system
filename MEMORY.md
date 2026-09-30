@@ -841,26 +841,28 @@ that was wrong.) See `skills-inventory.md` for precedence and the duplicate-name
 Persistent resume state required by `PHASES.md` §6. Kept here because `MEMORY.md` is the
 project's existing memory mechanism, not a separate file.
 
-**Current phase:** Phase 1 — Requirements, Domain and System Modeling
-**Current step:** Step 1.6 — Domain Decision Documentation
-**Current sub-step:** ADR-0001 accepted; three schema-blocking decisions still open
+**Current phase:** Phase 2 — Architecture and Backend Foundation
+**Current step:** Step 2.4 — Error Model (implemented and tested)
+**Current sub-step:** Step 2.1/2.2 boundaries recorded in `src/modules/README.md`; error model
+shipped; remaining 2.3, 2.5, 2.6, 2.7
 
 | Item | State |
 |---|---|
-| Completed | **Phase 0 entirely**; Phase 1.1, 1.2, 1.3, 1.4, 1.5 → `DOMAIN-MODEL.md`; ADR-0001 → `adr/0001-authorization-model.md` |
-| In progress | Phase 1.6 — remaining domain decisions |
-| Remaining | Phase 1.6, then Phase 2 (backend foundation), Phase 3 (schema) onward |
-| Files modified | `MEMORY.md`, `DOMAIN-MODEL.md`, `adr/0001-authorization-model.md` — **no `src/`, schema, or config file touched** |
+| Completed | **Phase 0 entirely**; **Phase 1.1–1.5** + ADR-0001; Phase 2.1, 2.2 (documented), 2.4 (error model, 15 new tests) |
+| In progress | Phase 2 — Steps 2.3, 2.5, 2.6, 2.7 |
+| Remaining | Phase 2 Steps 2.3, 2.5, 2.6, 2.7, then Phase 3 (schema) |
+| Files modified | `MEMORY.md`, `DOMAIN-MODEL.md`, `adr/0001-authorization-model.md`, `src/modules/README.md`, **new `src/shared/errors/{app-error.ts,index.ts,app-error.test.ts}`** |
 | Database changes | none |
 | Migration status | no `migrations/` directory exists |
-| Tests passing | 2 files / 5 tests (`pnpm test`) |
+| Tests passing | 3 files / **20 tests** (`pnpm test`) — up from 5 |
 | Tests failing | `pnpm test:e2e` → `Error: No tests found` (no Playwright tests exist yet) |
-| Known issues | `db:verify` returns `CONTRACT.MARKER_MISSING` (intentional — DB unsigned) |
-| Architectural decisions | D-1 authorization = capability RBAC + explicit resource scope, `User.role` string dropped (ADR-0001); D-2 placement is per-session history; D-3 admission separate from student; D-4 lifecycle vs archival are separate axes; D-5 actors split into assigned roles and derived person-type bindings |
-| Blockers | Phase 3 schema is blocked on 3 open decisions: Teacher-vs-User shape, money representation, guardian account model (`DOMAIN-MODEL.md` §7) |
+| Known issues | `db:verify` returns `CONTRACT.MARKER_MISSING` (intentional — DB unsigned); ESLint import-boundary enforcement for `src/modules/**` is documented but **not yet configured** |
+| Gates | `pnpm typecheck` clean · `pnpm lint` clean · `pnpm test` 20/20 |
+| Architectural decisions | D-1 authorization = capability RBAC + explicit scope (ADR-0001); D-2 per-session placement; D-3 admission separate from student; D-4 lifecycle vs archival split; D-5 actors split into assigned roles and derived bindings; **D-6 layer boundaries recorded in `src/modules/README.md`** |
+| Blockers | Phase 3 schema blocked on 3 open decisions: Teacher-vs-User shape, money representation, guardian account model (`DOMAIN-MODEL.md` §7) |
 | Required user actions | decide the 3 open questions, or approve the agent to derive them as ADR-0002..0004 |
-| Last verified state | 2026-09-30, all gates re-run (see header) |
-| Exact next action | resolve the 3 open decisions, close Step 1.6, then begin **Phase 2 Step 2.1 — Backend Boundary Design** |
+| Last verified state | 2026-09-30, `pnpm verify` equivalent run manually (typecheck + lint + test) |
+| Exact next action | Phase 2.6 shared utilities (validation, auth helpers, db helpers) with tests, then 2.5 logging, 2.3 database infrastructure, 2.7 infrastructure tests |
 
 ### Environment snapshot
 
