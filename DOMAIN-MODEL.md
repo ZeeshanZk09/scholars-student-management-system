@@ -233,20 +233,23 @@ These are confirmed against `PRD.md` / `RULES.md`, in severity order.
 | D-3 | Admission is a separate entity from Student; conversion is a transition | §3 above; fixes G-3 |
 | D-4 | Student lifecycle status and archival flag are separate axes | §3 above; fixes G-12 |
 | D-5 | Actor list splits into assigned job-function roles and derived person-type bindings | §1.1 above |
+| D-6 | A teacher is a `User` login + a separate `Teacher` employment profile; `TeachingAssignment` carries scope | `adr/0002-teacher-model.md`; fixes G-4 |
+| D-7 | Money is `Decimal(18,2)` + explicit currency in one shared `Money` value type; balances computed, never stored | `adr/0003-money-model.md`; fixes G-10, G-11 |
+| D-8 | A guardian is a `ParentGuardian` person with an optional `User` login; access follows only `GuardianLink`; `Student.guardianId` deleted | `adr/0004-guardian-model.md`; fixes G-8 |
+| D-9 | Layer boundaries point inward; domain is framework-free; cross-module access via each `index.ts` | `src/modules/README.md` |
+
+**All three schema-blocking decisions are now resolved.** Phase 3 is unblocked. D-6, D-7 and D-8
+each fix a previously logged archived-schema defect, so the domain model and the contract
+divergences are now closed out rather than deferred.
 
 ### Still open
 
-1. **Teacher vs User relationship.** ADR-0001 introduces `TeachingAssignment` for scope, but
-   whether a Teacher is a `User` with the Teacher role, a separate entity, or both is undecided.
-   This blocks the teacher half of the Phase 3 schema.
-2. **Money representation.** Decimal scale, currency handling, and whether a single shared money
-   value type is introduced. Blocks fee/payment tables.
-3. **Guardian representation.** One `User` per guardian person, or a `User` per login linked to
-   several `ParentGuardian` records. Affects whether a guardian with two children needs two
-   accounts.
-4. **Deleted UI components** (`header.tsx`, `user-menu.tsx`) — what replaces them.
-5. **Node pinning** — no `engines`/`.nvmrc`, so CI would float.
-6. **`TECH-STACK.md`, `SECURITY.md`, `DESIGN.md`, `PERFORMANCE.md`** were not yet read in full;
+1. **Deleted UI components** (`header.tsx`, `user-menu.tsx`) — what replaces them.
+2. **Node pinning** — no `engines`/`.nvmrc`, so CI would float.
+3. **`TECH-STACK.md`, `SECURITY.md`, `DESIGN.md`, `PERFORMANCE.md`** were not yet read in full;
    their constraints are not yet reflected in this model. Phase 1.5/1.6 should be revisited once
    they are.
+4. **Multi-currency with non-2-decimal currencies** — D-7 assumes scale 2 (correct for PKR/USD).
+   KWD/BHD (3 decimals) and JPY/KRW (0) would require revisiting ADR-0003. Not currently required.
+
 
