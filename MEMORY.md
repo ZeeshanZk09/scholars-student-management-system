@@ -20,9 +20,15 @@
 
 ## 1. Project state
 
-**Status: scaffold / pre-architecture.** The app renders an empty home page. There are no
-feature routes, no auth, no API routes, no server actions, and no database queries.
-`src/components/ui/**` is a shadcn component library that nothing imports yet.
+**Status: Phase 2 complete — architecture and shared backend foundation shipped; the app itself
+is still an empty home page.** There are no feature routes, no auth, no API routes, and no server
+actions. `src/components/ui/**` is a shadcn component library that nothing imports yet.
+
+What *does* exist is the tested foundation the features will sit on: `src/shared/errors`,
+`src/shared/money`, `src/shared/logging`, `src/shared/validation`, `src/shared/authorization`,
+`src/prisma/{db,env}.ts`, and `src/modules/README.md` recording the layer boundaries. 113 tests
+cover it. Phase 1 decisions (ADR-0001…0004, D-1…D-9) are recorded, so Phase 3 schema work is
+unblocked. There are still **no database queries** — the contract is deliberately still empty.
 
 **The data layer has been reset for the rebuild:** `src/prisma/contract.prisma` holds no
 models, `contract.json` / `contract.d.ts` are regenerated with no models, `migrations/` is
@@ -35,10 +41,11 @@ begin, but no schema work should start until asked.
 `src/` as *reality*. Where they disagree, `src/` wins — but raise the conflict rather than
 silently picking one.
 
-`git log` has a single commit (`a7f608e Initial commit from Create Next App`). Only four
-files are tracked under `src/` (`app/globals.css`, `app/layout.tsx`, `app/page.tsx`,
-`app/favicon.ico`). **Everything else in `src/` is untracked** — a deletion is unrecoverable
-via git. See §13 (Repository traps).
+`src/` is now fully tracked (64 files across 13 commits) — this is no longer true, but the
+`/tmp/opencode/scholars-src-backup-20260930-194647/` safety copy from the start of the rebuild is
+still on disk and worth keeping until Phase 3 lands. Note the repo also carries a large
+pre-existing set of unrelated working-tree changes (~42 entries) that predate this work: inspect
+diffs and never bulk-reset. See §13 (Repository traps).
 
 ---
 
@@ -292,6 +299,24 @@ connection comes from `prisma.config.ts` / `process.env.DATABASE_URL`.
 
 This was done deliberately, to start the architecture rebuild from a clean contract, clean
 generated types, and an empty database. **`pnpm migration:check` passes in this state.**
+
+**The three decisions that used to block Phase 3 are now resolved and recorded** — do not re-open
+them without cause:
+
+| Decision | Resolution | Where |
+|---|---|---|
+| Teacher vs User | `User` 0..1 `Teacher` employment profile; access via `TeachingAssignment` (session + subject + section). No `Subject.teacherId` | ADR-0002, D-8 |
+| Money representation | `numeric(18,2)` + explicit currency; outstanding balance **computed**, not stored; unique receipt per institution. Prisma 8 has no `Decimal` class and `pg/numeric@1` uses canonical decimal **strings** — no decimal dependency was added | ADR-0003, D-7 |
+| Guardian account model | `ParentGuardian` is a person with an optional `User`; access follows **only** `GuardianLink`; `Student.guardianId` is removed | ADR-0004, D-9 |
+
+Authorization is settled too: capability RBAC with explicit scope, `User.role` removed in favour of
+`UserRole` / `Role` / `Permission` / `RolePermission` (ADR-0001, D-1).
+
+The three shared layers that constrain how the schema must be written are already built and
+tested, so read them before designing models: `src/shared/money/money.ts` (money is a `Money`
+value in `bigint` minor units, never a JS number), `src/shared/authorization/permissions.ts` (the
+`Permission.key` values are a typed constant — the schema must use exactly these), and
+`src/prisma/env.ts` (the connection is validated at import).
 
 ### The previous 20-model design is archived, not lost
 
@@ -552,6 +577,51 @@ dangling import that broke `tsc` even though the source was gone. Fix: `rm -rf .
 ---
 
 ## 13. Repository traps
+
+### `db.transaction(fn)` already exists — do not hand-roll a transaction helper
+
+`db` is a `PostgresClient`, **not** a `Runtime`. It has no `connection()` to hand out, which is
+the tell: the pooled-connection lifecycle is the library's business, not the application's.
+
+```ts
+const result = await db.transaction(async (tx) => {
+  // tx.orm / tx.sql / tx.query / tx.execute
+  return something;
+});
+```
+
+It delegates to the runtime's own `withTransaction`, which was read and does all of it:
+destroys the connection if the **rollback** fails (wrapping the error with the original as
+`cause`), attempts a rollback and destroys on **commit** failure, `release()`s otherwise, and
+guards the scope so it cannot be used after the transaction ends. A hand-rolled helper duplicated
+every one of those behaviours with a worse error taxonomy. It was written, found to be redundant,
+and deleted — do not repeat it.
+
+`PostgresTransactionContext` is **not** re-exported from `@prisma/orm-postgres/runtime`, so do not
+import it by name. `src/prisma/db.ts` derives it instead:
+
+```ts
+export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+```
+
+Deriving means the type cannot drift from the runtime, and no transitive package is depended on.
+
+### `vitest.config.ts` used to exclude all of `src/prisma/**` — a test there never ran
+
+The exclusion existed to keep generated `contract.json` / `contract.d.ts` out of the run, but
+`include` is already `src/**/*.test.ts`, which neither artifact can match. So the directory
+exclusion bought nothing and suppressed every `*.test.ts` in the database layer instead.
+`src/prisma/env.test.ts` was written, `pnpm test` reported green, and it had never executed.
+Narrowed to `["node_modules/**", ".next/**"]`. **If a new test file seems to not run, check this
+first** — a green run that silently skipped the file is worse than a failure.
+
+### Zod 4 differences that produce wrong-but-plausible results
+
+| Behaviour | Detail |
+|---|---|
+| **Single-character TLD is rejected** | `z.string().email()` rejects `a@b.c`; Zod 3 accepted it. Realistic addresses are unaffected, but test data written from Zod 3 habits fails. |
+| **`trim()` / `toLowerCase()` do apply before `.email()`** | Checks run in chain order, so normalizing first is correct. |
+| **Type failures need `error`** | `z.string()` on `undefined` reports `Invalid input: expected string, received undefined`. Pass `.string({ error: "DATABASE_URL is required." })` to name the variable an operator must set — the Zod 3 `required_error` / `invalid_type_error` pair is gone. |
 
 **`pnpm migration:plan` is NOT read-only — it writes `migrations/` (verified 2026-09-30).**
 Running it created `migrations/app/<timestamp>_migration/` and `migrations/snapshots/<hash>/`,
@@ -867,29 +937,29 @@ that was wrong.) See `skills-inventory.md` for precedence and the duplicate-name
 Persistent resume state required by `PHASES.md` §6. Kept here because `MEMORY.md` is the
 project's existing memory mechanism, not a separate file.
 
-**Current phase:** Phase 2 — Architecture and Backend Foundation
-**Current step:** Step 2.4 — Error Model (implemented and tested)
-**Current sub-step:** Step 2.1/2.2 boundaries recorded in `src/modules/README.md`; error model
-shipped; remaining 2.3, 2.5, 2.6, 2.7
+**Current phase:** Phase 2 — Architecture and Backend Foundation (complete)
+**Current step:** Steps 2.3–2.7 all shipped and verified; ready to start Phase 3 (schema)
+**Current sub-step:** none in flight
 
 | Item | State |
 |---|---|
-| Completed | **Phase 0 entirely**; **Phase 1.1–1.5** + ADR-0001; Phase 2.1, 2.2 (documented), 2.4 (error model, 15 new tests) |
-| In progress | Phase 2 — Steps 2.3, 2.5, 2.6, 2.7 |
-| Remaining | Phase 2 Steps 2.3, 2.5, 2.6, 2.7, then Phase 3 (schema) |
-| Files modified | `MEMORY.md`, `DOMAIN-MODEL.md`, `adr/0001-authorization-model.md`, `src/modules/README.md`, **new `src/shared/errors/{app-error.ts,index.ts,app-error.test.ts}`** |
-| Database changes | none |
+| Completed | **Phase 0 entirely**; **Phase 1 entirely** (incl. 1.6 — ADRs 0001–0004, D-1…D-9 recorded, all three former schema blockers resolved); **Phase 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7** |
+| In progress | none |
+| Remaining | Phase 3 (schema), then Phase 4 (auth mechanism) |
+| Shared foundation shipped | `src/shared/{errors,money,logging,validation,authorization}` — each with an `index.ts` public surface and tests |
+| Database changes | none — still read-only, no schema, no migrations |
 | Migration status | no `migrations/` directory exists |
-| Tests passing | 3 files / **20 tests** (`pnpm test`) — up from 5 |
+| Tests passing | 8 files / **113 tests** (`pnpm test`) — up from 5 at session start |
 | Tests failing | `pnpm test:e2e` → `Error: No tests found` (no Playwright tests exist yet) |
 | Known issues | `db:verify` returns `CONTRACT.MARKER_MISSING` (intentional — DB unsigned); ESLint import-boundary enforcement for `src/modules/**` is documented but **not yet configured** |
-| Gates | `pnpm typecheck` clean · `pnpm lint` clean · `pnpm test` 20/20 |
-| Architectural decisions | D-1 authorization = capability RBAC + explicit scope (ADR-0001); D-2 per-session placement; D-3 admission separate from student; D-4 lifecycle vs archival split; D-5 actors split into assigned roles and derived bindings; **D-6 layer boundaries recorded in `src/modules/README.md`** |
-| Blockers | Phase 3 schema blocked on 3 open decisions: Teacher-vs-User shape, money representation, guardian account model (`DOMAIN-MODEL.md` §7) |
-| Step 2.3 verified | Connection works (PG 17.11, `public` exists, 0 tables, 0 enums); migrations are TypeScript classes not SQL; `migration:plan` **writes** — see §13. Remaining: transaction strategy, env config, `db.ts` transaction helper |
-| Required user actions | decide the 3 open questions, or approve the agent to derive them as ADR-0002..0004 |
-| Last verified state | 2026-09-30, `pnpm verify` equivalent run manually (typecheck + lint + test) |
-| Exact next action | Phase 2.6 shared utilities (validation, auth helpers, db helpers) with tests, then 2.5 logging, 2.3 database infrastructure, 2.7 infrastructure tests |
+| Gates | `pnpm verify` clean (typecheck + lint + 113 tests) · `pnpm build` succeeds |
+| Architectural decisions | D-1 authorization = capability RBAC + explicit scope (ADR-0001); D-2 per-session placement; D-3 admission separate from student; D-4 lifecycle vs archival split; D-5 actors split into assigned roles and derived bindings; D-6 layer boundaries in `src/modules/README.md`; **D-7 money = `numeric(18,2)` + explicit currency, computed balance, no decimal dep (ADR-0003)**; **D-8 teacher = optional User + Teacher profile + TeachingAssignment (ADR-0002)**; **D-9 guardian = ParentGuardian person + optional User, access only via GuardianLink, no `Student.guardianId` (ADR-0004)** |
+| Blockers | **none** — the 3 open decisions that gated Phase 3 are resolved and recorded |
+| Step 2.3 verified | Connection works (PG 17.11, `public` exists, 0 tables, 0 enums); migrations are TypeScript classes not SQL; `migration:plan` **writes** — see §13. Env validation added (`src/prisma/env.ts`); **no transaction helper is needed — `db.transaction(fn)` already exists**, see §13 |
+| Step 2.6 authorization scope | Typed `PERMISSION_KEYS` (every key cites its PRD/RULES source), `Principal`, `requirePermission`, `requireInstitutionScope`, `requireSelfScope`. Guardian/teacher scope and the state check are deliberately left to the application and domain layers |
+| Required user actions | none outstanding; the authentication mechanism still needs approval in Phase 4 |
+| Last verified state | 2026-09-30, `pnpm verify` and `pnpm build` both clean at `5d0ca5c` |
+| Exact next action | Start Phase 3: author `src/prisma/contract.prisma` from D-1…D-9, run `pnpm contract:emit`, then `pnpm migration:check`. Get approval before any write to the database (`db:init`, `db:update`, `db:migrate`, `db:sign`) |
 
 ### Environment snapshot
 
