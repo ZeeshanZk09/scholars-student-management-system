@@ -1141,9 +1141,10 @@ this file maps as: legacy Phase 0 = PHASES Phase 0; legacy Phase 1 (domain/ADRs)
 Phase 2 tasks 1–16; legacy Phase 2 (schema) = PHASES Phase 2; legacy Phase 3 (schema shipped)
 = PHASES Phase 2 complete; legacy Phase 4 (auth) = PHASES Phase 3.
 
-**Current phase:** Phase 2 — Database & Domain Foundation (`BLOCKED` on task 17 only)
-**Current step:** Phase 2 task 17 — verify migration application
-**Current sub-step:** awaiting user approval to run `pnpm db:migrate`
+**Current phase:** Phase 3 — Authentication & Identity (`NOT_STARTED`)
+**Current step:** Phase 3 task 1 — read PHASES §11, then start the user/identity work
+**Current sub-step:** Phase 2 closed out (baseline applied, gate green, tree committed);
+Auth.js (NextAuth v5) approved but **not yet installed**
 
 ### Phase states (PHASES.md §6)
 
@@ -1151,40 +1152,42 @@ Phase 2 tasks 1–16; legacy Phase 2 (schema) = PHASES Phase 2; legacy Phase 3 (
 |---|---|---|
 | Phase 0 — Discovery & Engineering Baseline | `COMPLETED` | incl. task 17 baseline verification report: frozen install, verify, format:check, build, test:e2e all green (2026-10-06) |
 | Phase 1 — Project Infrastructure & Runtime Foundation | `COMPLETED` | All 18 tasks done. This session: task 2 (constitution tsconfig flags added), task 4 (Prettier configured + repo formatted), task 17 (E2E infra: `e2e/smoke.spec.ts` + fixed Playwright webServer), task 18 (`pnpm verify` / `format:check` / `build` / `test:e2e`). Caveats → known issues below |
-| Phase 2 — Database & Domain Foundation | `BLOCKED` | Tasks 1–16, 18 done; **task 17 blocked**: applying `drizzle/0000_cute_bloodstrike.sql` needs explicit user approval (§59) |
-| Phase 3 — Authentication & Identity | `BLOCKED` | Cannot start: auth mechanism is an open user decision; no auth package may be installed without approval |
+| Phase 2 — Database & Domain Foundation | `COMPLETED` | All 18 tasks. Task 17 done 2026-10-06: baseline `drizzle/0000_steady_johnny_blaze.sql` applied via `pnpm db:migrate` — 145 tables, 45 enums, one `drizzle.__drizzle_migrations` row; full gate re-run green. Regeneration traps documented in §13 |
+| Phase 3 — Authentication & Identity | `NOT_STARTED` | User decision obtained: **Auth.js (NextAuth v5)** approved 2026-10-06 (install approved; no other auth package). Nothing installed yet |
 | Phases 4+ | `NOT_STARTED` | Follow PHASES.md dependency order |
 
 | Item | State |
 |---|---|
-| Completed | **Phase 0 entirely**; **Phase 1 entirely**; **Phase 2 tasks 1–16 and 18** (schema 145 tables/378 FKs/364 checks authored; ADRs 0001–0004; D-1…D-9 recorded) |
+| Completed | **Phase 0 entirely**; **Phase 1 entirely**; **Phase 2 entirely** (schema 145 tables/378 FKs/364 checks authored; baseline migration applied 2026-10-06; ADRs 0001–0004; D-1…D-9 recorded) |
 | In progress | none — no sub-step in flight |
-| Remaining | Phase 2 task 17 (migration application), then Phase 3 (auth), Phase 4 (roles/permissions), then feature phases 5+ |
+| Remaining | Phase 3 (auth — Auth.js v5 approved), Phase 4 (roles/permissions), then feature phases 5+ |
 | Shared foundation shipped | `src/shared/{errors,money,logging,validation,authorization}` — each with an `index.ts` public surface and tests |
-| Database changes | `src/db/schema/` authored — **145 tables**, 378 FKs, 364 check constraints. The database itself was never written; still 0 tables |
-| Migration status | `drizzle/0000_cute_bloodstrike.sql` generated and `db:check`-clean, **never applied** — applying needs approval (Phase 2 task 17) |
+| Database changes | `src/db/schema/` authored — **145 tables**, 378 FKs, 364 check constraints. **Applied to the local dev database**: 145 tables + 45 enums present in `public` |
+| Migration status | `drizzle/0000_steady_johnny_blaze.sql` generated, `db:check`-clean, **applied** 2026-10-06 (one `drizzle.__drizzle_migrations` row). Future `db:migrate` runs still need §59 approval |
 | Tests passing | 8 files / **124 tests** (`pnpm test`), including 13 schema-contract tests; **E2E: 1 smoke test** (`pnpm test:e2e`, green) |
 | Tests failing | none |
 | Verification status | 2026-10-06 full gate green: `pnpm install --frozen-lockfile` · `pnpm verify` (typecheck + lint + 124 tests + `db:check`) · `pnpm format:check` · `pnpm build` · `pnpm test:e2e` — all pass |
-| Known issues | ESLint import-boundary enforcement for `src/modules/**` is documented but **not yet configured**; **no CI pipeline exists** (commands are CI-compatible); **no schema-drift gate exists** (Drizzle cannot do it) — see §3; **`pnpm-lock.yaml`, `.env.example`, `src/db/schema/`, `drizzle/`, `e2e/` are untracked in git** — the working tree is recoverable only if committed (needs user approval); **95 non-primary `uuid` columns carry no foreign key, and a contract test now guards every one of them by name** (see §5) — of those, 12 are unexplained and believed to be omissions (`attendanceExceptions.institutionId`, `permissions.institutionId`, `schedulePublishHistory.scheduleId`, `teacherLeaveBalances.{academicSessionId,leaveTypeId}`, `teacherWorkloadHistory.academicSessionId`, `teacherAbsences.leaveRequestId`, plus `journalTransactions.{paymentId,payrollRunId}`, `payments.depositedToAccountId`, `payrollPayments.ledgerAccountId`, `payrollRuns.journalTransactionId`) and need a decision, not an assumption |
+| Known issues | ESLint import-boundary enforcement for `src/modules/**` is documented but **not yet configured**; **no CI pipeline exists** (commands are CI-compatible); **no schema-drift gate exists** (Drizzle cannot do it) — see §3; **95 non-primary `uuid` columns carry no foreign key, and a contract test now guards every one of them by name** (see §5) — of those, 12 are unexplained and believed to be omissions (`attendanceExceptions.institutionId`, `permissions.institutionId`, `schedulePublishHistory.scheduleId`, `teacherLeaveBalances.{academicSessionId,leaveTypeId}`, `teacherWorkloadHistory.academicSessionId`, `teacherAbsences.leaveRequestId`, plus `journalTransactions.{paymentId,payrollRunId}`, `payments.depositedToAccountId`, `payrollPayments.ledgerAccountId`, `payrollRuns.journalTransactionId`) and need a decision, not an assumption |
 | Gates | `pnpm verify` clean · `pnpm format:check` clean · `pnpm build` succeeds · `pnpm test:e2e` 1 passed |
 | Architectural decisions | D-1 authorization = capability RBAC + explicit scope (ADR-0001); D-2 per-session placement; D-3 admission separate from student; D-4 lifecycle vs archival split; D-5 actors split into assigned roles and derived bindings; D-6 layer boundaries in `src/modules/README.md`; D-7 money = `numeric(18,2)` + explicit currency, computed balance, no decimal dep (ADR-0003); D-8 teacher = optional User + Teacher profile + TeachingAssignment (ADR-0002); D-9 guardian = ParentGuardian person + optional User, access only via GuardianLink, no `Student.guardianId` (ADR-0004) |
 | Infra decisions (this session) | Prettier config (`.prettierrc`/`.prettierignore`, `eslint-config-prettier` wired); Node pinned (`.nvmrc` = 26.8.1, `engines >=26.8.1`); tsconfig hardened with constitution flags (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `noUnusedLocals`, `noUnusedParameters`) — 4 resulting errors fixed in `playwright.config.ts`, `src/components/ui/{scroll-area,sonner,calendar}.tsx`; Playwright `webServer.command` = `node node_modules/next/dist/bin/next dev` (pnpm-spawned `next dev` is SIGKILLed on teardown and orphans port 3000) |
-| Blockers (§59 — user decisions required) | **1. Apply the baseline migration** (`pnpm db:migrate` against local `scholars-postgres:5433`) — gates Phase 2 task 17. **2. Auth mechanism** — gates Phase 3; no auth package may be added without approval (see §9). **3. (recommended) Commit the working tree** — critical paths (`src/db/schema/`, `drizzle/`, `pnpm-lock.yaml`, `e2e/`) are untracked; git history ends at `f8b256d` |
-| Step 2.3 verified | Connection works (PG 17, `public` exists, 0 tables, 0 enums); migrations are plain `.sql` files; `db:generate` writes files but never the DB — see §13. Env validation added (`src/db/env.ts`); **no transaction helper is needed — `db.transaction(fn)` already exists**, see §13 |
+| Blockers (§59 — user decisions required) | **All three resolved 2026-10-06.** 1. ~~Apply the baseline migration~~ → applied (`pnpm db:migrate`, 145 tables + 45 enums). 2. ~~Auth mechanism~~ → **Auth.js (NextAuth v5)** approved. 3. ~~Commit the working tree~~ → committed across 6 commits (`a058bda`…`0750f26`, on top of `f8b256d`). Standing rule: future `db:migrate` applications and any auth package outside Auth.js still need explicit approval |
+| Step 2.3 verified | Connection works (PG 17, `public` exists, **145 tables, 45 enums** — baseline applied); migrations are plain `.sql` files; `db:generate` writes files but never the DB — see §13. Env validation added (`src/db/env.ts`); **no transaction helper is needed — `db.transaction(fn)` already exists**, see §13 |
 | Step 2.6 authorization scope | Typed `PERMISSION_KEYS` (every key cites its PRD/RULES source), `Principal`, `requirePermission`, `requireInstitutionScope`, `requireSelfScope`. Guardian/teacher scope and the state check are deliberately left to the application and domain layers |
-| Required user actions | the 3 blockers above; nothing else outstanding |
-| Last verified state | 2026-10-06: frozen install, `pnpm verify`, `pnpm format:check`, `pnpm build`, `pnpm test:e2e` — all green |
-| Exact next action | Get the Phase 2 task 17 approval → run `pnpm db:migrate` → confirm 145 tables + re-run `pnpm verify` → mark Phase 2 `COMPLETED` → present auth-mechanism decision → start Phase 3 task 1 (user entity) |
+| Required user actions | none outstanding — standing §59 approvals only (future `db:migrate`, non-Auth.js auth packages) |
+| Last verified state | 2026-10-06: frozen install, `pnpm verify` (124 tests), `pnpm format:check`, `pnpm build`, `pnpm test:e2e` — all green **after** the migration was applied; working tree clean and committed |
+| Exact next action | Read PHASES §11 → `pnpm add next-auth@beta @auth/drizzle-adapter` (approved) → execute Phase 3 tasks in dependency order → verify per task |
 
 ### Environment snapshot
 
-`scholars-postgres` (`postgres:17-alpine`) is up on host port **5433** (verified 2026-10-06),
-0 tables. `e2e/` now exists (1 smoke spec); `scripts/` and `src/tests/` do **not** exist.
-`public/` is empty. `src/shared/` exists (shipped earlier). `drizzle/` holds the generated
-baseline migration plus `meta/`.
+`scholars-postgres` (`postgres:17-alpine`) is up on host port **5433** (verified 2026-10-06)
+holding the **applied baseline**: 145 tables, 45 enums. `e2e/` exists (1 smoke spec); `scripts/`
+and `src/tests/` do **not** exist. `public/` is empty. `drizzle/` holds the baseline migration
+plus `meta/`.
 
-**No `/tmp` safety copy exists.** Both previous backup directories were lost when `/tmp` was
-cleared. `src/` is tracked in git, but `src/db/schema/`, `drizzle/`, `pnpm-lock.yaml` and
-`e2e/` are **not** — committing them is the outstanding recoverability gap.
+**Working tree committed 2026-10-06** (clean; 6 commits `a058bda`…`0750f26` on top of
+`f8b256d`): tooling, schema + migrations, shared foundation, e2e, docs, and the vendored agent
+roots (`.agency-agents` is vendored as plain files; 273 of its files are skipped by *its own*
+upstream `.gitignore`). `/tmp` backups remain unreliable across sessions — git is now the safety
+net. `.env` stays untracked by design (`.gitignore`), with `.env.example` committed.
 
