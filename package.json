@@ -23,12 +23,14 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:check": "drizzle-kit check",
+    "db:seed": "tsx scripts/seed.ts",
     "db:introspect": "drizzle-kit introspect",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@hookform/resolvers": "^5.9.1",
+    "@node-rs/argon2": "^2.2.1",
     "@phosphor-icons/react": "2.1.10",
     "@tanstack/react-table": "^9.2.4",
     "class-variance-authority": "^0.7.1",
@@ -38,6 +40,7 @@
     "dotenv": "^18.0.4",
     "drizzle-orm": "^0.45.3",
     "next": "16.3.6",
+    "next-auth": "5.0.0-beta.32",
     "next-themes": "^0.4.6",
     "pg": "^8.23.1",
     "react": "19.2.8",
@@ -65,6 +68,7 @@
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.9",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.2"
   }
