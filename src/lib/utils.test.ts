@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 /**
  * Guards the class-merging contract the UI components rely on:
@@ -9,14 +9,14 @@ import { cn } from "@/lib/utils"
  */
 describe("cn", () => {
   it("keeps non-conflicting classes", () => {
-    expect(cn("flex", "items-center")).toBe("flex items-center")
-  })
+    expect(cn("flex", "items-center")).toBe("flex items-center");
+  });
 
   it("resolves conflicting utilities in favour of the last one", () => {
-    expect(cn("px-2", "px-4")).toBe("px-4")
-  })
+    expect(cn("px-2", "px-4")).toBe("px-4");
+  });
 
   it("drops falsy and conditional values", () => {
-    expect(cn("p-2", false && "hidden", null, undefined)).toBe("p-2")
-  })
-})
+    expect(cn("p-2", false && "hidden", null, undefined)).toBe("p-2");
+  });
+});

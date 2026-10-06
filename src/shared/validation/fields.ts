@@ -15,14 +15,21 @@ export const nonEmptyText = (label: string, max = 255) =>
     .min(1, `${label} is required.`)
     .max(max, `${label} must be at most ${max} characters.`);
 
-/** An email address, normalized to lowercase so uniqueness is case-insensitive. */
+/**
+ * An email address, normalized to lowercase so uniqueness is case-insensitive.
+ *
+ * Normalization runs *before* the format check. `z.email()` is a format schema, so it validates whatever
+ * it is given at that point in the chain: `z.email().trim()` rejects `" a@b.co "` for the leading space
+ * it is supposed to remove. Piping the normalized value into the check is what makes a pasted address
+ * with stray whitespace — the common case — validate instead of failing.
+ */
 export const emailAddress = z
   .string()
   .trim()
   .toLowerCase()
   .min(1, "Email is required.")
-  .email("Enter a valid email address.")
-  .max(254, "Email must be at most 254 characters.");
+  .max(254, "Email must be at most 254 characters.")
+  .pipe(z.email("Enter a valid email address."));
 
 /**
  * A phone number in digits, spaces, `+`, `-` and parentheses.
@@ -59,7 +66,10 @@ export const calendarDate = (label: string) =>
     .string()
     .trim()
     .regex(/^\d{4}-\d{2}-\d{2}$/, `${label} must be in YYYY-MM-DD format.`)
-    .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)), `${label} is not a real date.`);
+    .refine(
+      (value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)),
+      `${label} is not a real date.`,
+    );
 
 /** A whole number within an inclusive range. */
 export const wholeNumber = (label: string, min: number, max: number) =>
@@ -73,12 +83,12 @@ export const wholeNumber = (label: string, min: number, max: number) =>
  * An amount in decimal text, as produced by `toDecimalText` in `shared/money`.
  *
  * Validated as text rather than a JS number, because a `number` cannot hold every cent — the same
- * reason the Prisma 8 numeric codec rejects one.
+ * reason a `numeric` column is read back as text rather than a JS number.
  */
 export const decimalAmount = z
   .string()
   .trim()
-  .regex(/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/, "Enter an amount with at most 2 decimal places.");
+  .regex(/^-?(?:0|[1-9]\d*)(?:\.\d{1,2})?$/, "Enter an amount with at most 2 decimal places.");
 
 /** A non-negative decimal amount. */
 export const nonNegativeAmount = decimalAmount.refine(

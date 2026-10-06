@@ -51,7 +51,15 @@ describe("isSensitiveKey", () => {
   });
 
   it("does not flag innocuous keys that merely look similar", () => {
-    for (const key of ["author", "authority", "authorizedAt", "studentId", "className", "amount", "currency"]) {
+    for (const key of [
+      "author",
+      "authority",
+      "authorizedAt",
+      "studentId",
+      "className",
+      "amount",
+      "currency",
+    ]) {
       expect(isSensitiveKey(key), key).toBe(false);
     }
   });
@@ -119,7 +127,10 @@ describe("redact", () => {
 
   it("caps oversized arrays and objects", () => {
     const many = Array.from({ length: 60 }, (_unused, index) => index);
-    const result = redact({ many, wide: Object.fromEntries(Array.from({ length: 60 }, (_u, i) => [`k${i}`, i])) }) as {
+    const result = redact({
+      many,
+      wide: Object.fromEntries(Array.from({ length: 60 }, (_u, i) => [`k${i}`, i])),
+    }) as {
       many: unknown[];
       wide: Record<string, unknown>;
     };
@@ -229,9 +240,7 @@ describe("loggableError", () => {
   });
 
   it("reduces an unknown throw to its type, not its contents", () => {
-    expect(loggableError("connection string leaked").errorMessage).toBe(
-      "connection string leaked",
-    );
+    expect(loggableError("connection string leaked").errorMessage).toBe("connection string leaked");
     expect(loggableError(42)).toEqual({ errorType: "number", errorMessage: "42" });
   });
 

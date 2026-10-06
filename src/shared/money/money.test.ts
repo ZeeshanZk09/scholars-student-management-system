@@ -68,7 +68,7 @@ describe("parsing", () => {
     });
   });
 
-  it("rejects amounts the Prisma numeric codec would also reject, plus floats", () => {
+  it("rejects amounts a permissive numeric parse would also reject, plus floats", () => {
     // Exponents, leading '+', leading zeros, whitespace, and non-strings.
     for (const bad of ["1e3", "+1.00", "01.00", " 1.00", "1.00 ", ".5", "1.", "NaN", "Infinity"]) {
       expect(() => pkr(bad), bad).toThrow();
@@ -124,8 +124,9 @@ describe("currency safety", () => {
       add(pkr("1.00"), usd("1.00"));
       expect.unreachable("expected a currency mismatch");
     } catch (error) {
-      const client = (error as { toClientError: () => { code: string; message: string } })
-        .toClientError();
+      const client = (
+        error as { toClientError: () => { code: string; message: string } }
+      ).toClientError();
       expect(client.code).toBe("BUSINESS_RULE");
       expect(client.message).toMatch(/Convert the amount to a single currency/);
     }
@@ -185,7 +186,10 @@ describe("allocate", () => {
   it("rejects a non-positive or fractional part count", () => {
     for (const bad of [0, -1, 2.5]) {
       expect(() => allocate(pkr("10.00"), bad), String(bad)).toThrow(/Cannot split into/);
-      expect(clientErrorOf(() => allocate(pkr("10.00"), bad)), String(bad)).toMatchObject({
+      expect(
+        clientErrorOf(() => allocate(pkr("10.00"), bad)),
+        String(bad),
+      ).toMatchObject({
         code: "VALIDATION",
         fieldErrors: { count: ["Must be a positive whole number of parts."] },
       });

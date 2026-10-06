@@ -77,6 +77,29 @@ function truncate(text: string): string {
     : `${text.slice(0, MAX_STRING_LENGTH)}…[${text.length} chars]`;
 }
 
+function redactCollection(
+  value: unknown[] | Record<string, unknown>,
+  depth: number,
+  seen: WeakSet<object>,
+): unknown {
+  if (seen.has(value)) return "[circular]";
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    const items = value.slice(0, MAX_ARRAY_ITEMS).map((item) => redactValue(item, depth + 1, seen));
+    if (value.length > MAX_ARRAY_ITEMS) {
+      items.push(`…[${value.length - MAX_ARRAY_ITEMS} more]`);
+    }
+    return items;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value).slice(0, MAX_OBJECT_KEYS)) {
+    result[key] = isSensitiveKey(key) ? REDACTED : redactValue(entry, depth + 1, seen);
+  }
+  return result;
+}
+
 function redactValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
   if (value === null || value === undefined) return value;
 
@@ -101,25 +124,7 @@ function redactValue(value: unknown, depth: number, seen: WeakSet<object>): unkn
   }
   if (depth >= MAX_DEPTH) return "[max depth]";
 
-  if (Array.isArray(value)) {
-    if (seen.has(value)) return "[circular]";
-    seen.add(value);
-    const items = value.slice(0, MAX_ARRAY_ITEMS).map((item) => redactValue(item, depth + 1, seen));
-    if (value.length > MAX_ARRAY_ITEMS) {
-      items.push(`…[${value.length - MAX_ARRAY_ITEMS} more]`);
-    }
-    return items;
-  }
-
-  const object = value as Record<string, unknown>;
-  if (seen.has(object)) return "[circular]";
-  seen.add(object);
-
-  const result: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(object).slice(0, MAX_OBJECT_KEYS)) {
-    result[key] = isSensitiveKey(key) ? REDACTED : redactValue(entry, depth + 1, seen);
-  }
-  return result;
+  return redactCollection(value as unknown[] | Record<string, unknown>, depth, seen);
 }
 
 /** Return a log-safe copy of `value`: sensitive keys masked, oversized values truncated. */

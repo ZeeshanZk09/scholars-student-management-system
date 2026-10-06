@@ -29,7 +29,9 @@ export function toValidationError(error: z.ZodError, subject = "request"): Valid
 
   for (const issue of error.issues) {
     const key = issue.path.length > 0 ? issue.path.join(".") : subject;
-    (fieldErrors[key] ??= []).push(issue.message);
+    const messages = fieldErrors[key] ?? [];
+    messages.push(issue.message);
+    fieldErrors[key] = messages;
   }
 
   for (const key of Object.keys(fieldErrors)) {

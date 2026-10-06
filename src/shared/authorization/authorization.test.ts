@@ -67,7 +67,13 @@ describe("PERMISSION_KEYS", () => {
     expect(isPermissionKey("attendance.mark")).toBe(true);
 
     // The exact drift ADR-0001 exists to prevent.
-    for (const bad of ["attendance.mark_all", "attendance.", "ATTENDANCE.MARK", "attendance.mark ", ""]) {
+    for (const bad of [
+      "attendance.mark_all",
+      "attendance.",
+      "ATTENDANCE.MARK",
+      "attendance.mark ",
+      "",
+    ]) {
       expect(isPermissionKey(bad), bad).toBe(false);
     }
   });

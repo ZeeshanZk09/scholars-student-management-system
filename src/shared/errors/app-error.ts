@@ -108,11 +108,7 @@ export class ValidationError extends AppError {
 
   readonly fieldErrors: FieldErrors;
 
-  constructor(
-    message: string,
-    fieldErrors: FieldErrors,
-    options: DefaultableOptions = {},
-  ) {
+  constructor(message: string, fieldErrors: FieldErrors, options: DefaultableOptions = {}) {
     super(message, withDefault(options, DEFAULT_MESSAGES.VALIDATION));
     this.fieldErrors = fieldErrors;
   }

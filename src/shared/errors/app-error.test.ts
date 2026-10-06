@@ -22,7 +22,9 @@ describe("error codes and statuses", () => {
       [new NotFoundError(), ERROR_CODES.NOT_FOUND, 404],
       [new ConflictError(), ERROR_CODES.CONFLICT, 409],
       [
-        new BusinessRuleError("invalid transition", { userMessage: "Cannot promote a withdrawn student." }),
+        new BusinessRuleError("invalid transition", {
+          userMessage: "Cannot promote a withdrawn student.",
+        }),
         ERROR_CODES.BUSINESS_RULE,
         422,
       ],
@@ -49,7 +51,9 @@ describe("user-facing messages", () => {
       new ForbiddenError(),
       new NotFoundError(),
       new ConflictError(),
-      new BusinessRuleError("invalid transition", { userMessage: "Cannot promote a withdrawn student." }),
+      new BusinessRuleError("invalid transition", {
+        userMessage: "Cannot promote a withdrawn student.",
+      }),
       new InternalError(),
     ];
 
@@ -115,7 +119,7 @@ describe("toClientError", () => {
   });
 
   it("hides an unknown throw behind a generic internal error", () => {
-    const thrown = new Error("relation \"Student\" does not exist");
+    const thrown = new Error('relation "Student" does not exist');
     const client = toClientError(thrown);
 
     expect(client.code).toBe(ERROR_CODES.INTERNAL);

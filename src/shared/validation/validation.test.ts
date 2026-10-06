@@ -43,7 +43,9 @@ describe("parseOrThrow", () => {
   });
 
   it("flattens nested paths so a form can map messages back to inputs", () => {
-    const nested = z.object({ address: z.object({ city: z.string().min(1, "City is required.") }) });
+    const nested = z.object({
+      address: z.object({ city: z.string().min(1, "City is required.") }),
+    });
     const client = clientErrorOf(() => parseOrThrow(nested, { address: { city: "" } }));
 
     expect(Object.keys(client.fieldErrors ?? {})).toEqual(["address.city"]);
@@ -51,7 +53,12 @@ describe("parseOrThrow", () => {
   });
 
   it("keeps only the first message per field", () => {
-    const strict = z.object({ code: z.string().min(3, "Too short.").regex(/^[0-9]+$/, "Digits only.") });
+    const strict = z.object({
+      code: z
+        .string()
+        .min(3, "Too short.")
+        .regex(/^[0-9]+$/, "Digits only."),
+    });
     const client = clientErrorOf(() => parseOrThrow(strict, { code: "a" }));
 
     expect(client.fieldErrors?.code).toHaveLength(1);
@@ -94,9 +101,7 @@ describe("optionalPositiveInt", () => {
   it("rejects zero, negatives, fractions and overflow", () => {
     for (const bad of ["0", "-1", "2.5", "1001", "abc"]) {
       const client = clientErrorOf(() => optionalPositiveInt(bad, 1));
-      expect(client.fieldErrors?.page, bad).toEqual([
-        "Must be a whole number between 1 and 1000.",
-      ]);
+      expect(client.fieldErrors?.page, bad).toEqual(["Must be a whole number between 1 and 1000."]);
     }
   });
 });

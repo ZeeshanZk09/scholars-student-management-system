@@ -74,10 +74,7 @@ export function hasPermission(principal: Principal, permission: PermissionKey): 
  * @param recordInstitutionId - The `institutionId` of the record being acted on.
  * @throws {ForbiddenError} When the record belongs to a different institution.
  */
-export function requireInstitutionScope(
-  principal: Principal,
-  recordInstitutionId: string,
-): void {
+export function requireInstitutionScope(principal: Principal, recordInstitutionId: string): void {
   if (principal.institutionId === null) {
     return;
   }

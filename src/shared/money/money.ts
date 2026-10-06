@@ -3,8 +3,9 @@
  *
  * A `Money` amount is a `bigint` count of minor units at a fixed scale of 2. This is exact by
  * construction, needs no decimal dependency, and round-trips to the canonical decimal text that the
- * Prisma 8 `pg/numeric@1` codec requires as its application value — that codec returns a string and
- * rejects a JS `number`, so there is no `Decimal` class in this stack to defer to.
+ * database's `numeric` column yields as its application value — Drizzle's `numeric()` maps to a JS
+ * `string` precisely so that no precision is lost on the way out of the driver, so there is no
+ * `Decimal` class in this stack to defer to.
  *
  * Never represent money as a JS `number`. Every binary operation throws on a currency mismatch, so a
  * mixed-currency total fails loudly instead of being silently wrong.
@@ -13,9 +14,6 @@
  */
 import { BusinessRuleError, ValidationError } from "../errors";
 
-/** ISO 4217 alphabetic code. Validated on construction, so a `Money` is always well formed. */
-export type CurrencyCode = string;
-
 /** Minor units per major unit. Fixed at 2 — correct for PKR, USD, GBP and EUR. */
 const SCALE = 2;
 
@@ -23,19 +21,28 @@ const ZERO = BigInt(0);
 const ONE = BigInt(1);
 const MINOR_PER_MAJOR = BigInt(10) ** BigInt(SCALE);
 
-/** Plain decimal numeral, optionally negated. Stricter than the Prisma codec on purpose. */
-const CANONICAL_DECIMAL = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
+/** Plain decimal numeral, optionally negated. Stricter than a bare numeric parse on purpose. */
+const CANONICAL_DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
 const CURRENCY_CODE = /^[A-Za-z]{3}$/;
 
+/**
+ * A validated ISO 4217 alphabetic code.
+ *
+ * `ADR-0003` requires currency to be explicit on every amount and requires a mixed-currency sum to
+ * fail loudly. A branded type is what makes that hold at the edges: the only way to obtain one is
+ * `normalizeCurrency`, so a code that reached `Money` was pattern-checked and upper-cased, and a
+ * caller cannot construct `{ currency: "PKR " }` by hand and pass it on.
+ */
+export type CurrencyCode = string & { readonly __brand: unique symbol };
+
 function normalizeCurrency(currency: string): CurrencyCode {
   if (!CURRENCY_CODE.test(currency)) {
-    throw new ValidationError(
-      `Invalid currency code: ${currency}`,
-      { currency: ["Must be a 3-letter ISO 4217 code, e.g. PKR."] },
-    );
+    throw new ValidationError(`Invalid currency code: ${currency}`, {
+      currency: ["Must be a 3-letter ISO 4217 code, e.g. PKR."],
+    });
   }
-  return currency.toUpperCase();
+  return currency.toUpperCase() as CurrencyCode;
 }
 
 function assertSameCurrency(left: Money, right: Money): void {
@@ -70,17 +77,14 @@ function invalidAmount(received: string, reason: string): ValidationError {
 /**
  * Parse canonical decimal text into minor units.
  *
- * Rejects exponents, a leading `+`, leading zeros, whitespace, and the `NaN`/`Infinity` values the
- * Prisma codec would technically accept — money is never any of those.
+ * Rejects exponents, a leading `+`, leading zeros, whitespace, and the `NaN`/`Infinity` values a
+ * permissive numeric parse would technically accept — money is never any of those.
  */
 export function fromDecimalText(amount: string, currency: string): Money {
   const code = normalizeCurrency(currency);
 
   if (typeof amount !== "string" || !CANONICAL_DECIMAL.test(amount)) {
-    throw invalidAmount(
-      String(amount),
-      "Expected a plain decimal numeral such as 1250.50.",
-    );
+    throw invalidAmount(String(amount), "Expected a plain decimal numeral such as 1250.50.");
   }
 
   const negative = amount.startsWith("-");

@@ -1,8 +1,4 @@
-export {
-  ALL_PERMISSION_KEYS,
-  isPermissionKey,
-  PERMISSION_KEYS,
-} from "./permissions";
+export { ALL_PERMISSION_KEYS, isPermissionKey, PERMISSION_KEYS } from "./permissions";
 
 export type { PermissionKey } from "./permissions";
 
