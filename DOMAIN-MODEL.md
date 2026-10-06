@@ -1,8 +1,9 @@
 # DOMAIN-MODEL.md — Domain Model (PHASES.md Phase 1)
 
-> **Status:** Steps 1.1–1.5 recorded; Step 1.6 in progress (ADR-0001 accepted, 3 decisions open).
+> **Status:** Steps 1.1–1.6 recorded; ADR-0001 through ADR-0004 accepted; the three decisions that
+> blocked Phase 3 are resolved and Phase 3 is complete (§7).
 > **Sources:** `PRD.md` (intent), `ARCHITECTURE.md` (intent), `RULES.md` (binding constraints),
-> the archived 20-model contract (prior art, not authority).
+> the pre-Drizzle 20-model contract (its shape, recorded in `MEMORY.md` §5 — not authority).
 > **Authority order:** `RULES.md` §4 rule hierarchy, then `PHASES.md`, then `PRD.md` /
 > `ARCHITECTURE.md` intent, then reality in `src/`. Where they disagree this file records the
 > conflict rather than silently choosing.
@@ -52,7 +53,7 @@ but are lower build priority than the job-function roles.
 
 ## 2. Academic hierarchy (Step 1.3)
 
-Confirmed, and unanimous across `PRD.md` §6.4/§32, `RULES.md` §31 and the archived contract:
+Confirmed, and unanimous across `PRD.md` §6.4/§32, `RULES.md` §31 and the pre-Drizzle schema:
 
 ```text
 Institution
@@ -200,9 +201,11 @@ transient configuration may be removed.
 
 ## 6. Confirmed defects in the archived 20-model contract
 
-The archive at `/tmp/opencode/contract-backup-20260930-144738/` is **valid and reproducible**
-(verified — see `MEMORY.md` §5), so it is usable prior art. But it is not a sound target state.
-These are confirmed against `PRD.md` / `RULES.md`, in severity order.
+The archive at `/tmp/opencode/contract-backup-20260930-144738/` **no longer exists** — `/tmp` was
+cleared and the contract was never committed to git, so it is not usable prior art (see `MEMORY.md`
+§5, which supersedes any earlier claim that the archive was verified and reproducible). What remains
+of the 20-model contract is its shape, listed in `MEMORY.md` §5, and the defects below — these are
+confirmed against `PRD.md` / `RULES.md`, in severity order.
 
 | ID | Severity | Defect | Basis |
 |---|---|---|---|
@@ -217,7 +220,7 @@ These are confirmed against `PRD.md` / `RULES.md`, in severity order.
 | **G-9** | P2 | `Class.academicSessionId` optional — permits a class with no session, breaking BR-1 | §35 |
 | **G-10** | P2 | `StudentFee.outstandingAmount` is a stored computed value with nothing guaranteeing `amount − discount − paidAmount` | `RULES.md` §29 |
 | **G-11** | P2 | `Payment.receiptNumber` is not unique — receipts are the audit handle for money | `RULES.md` §29 |
-| **G-12** | P2 | Single `status` on `Student` conflates lifecycle (G-4 above) with archival | §33 |
+| **G-12** | P2 | Single `status` on `Student` conflates lifecycle (§3 above) with archival | §33 |
 | **G-13** | P3 | No `Document` entity, though §32 requires `Student → Documents` | §32 |
 
 ---
@@ -238,9 +241,50 @@ These are confirmed against `PRD.md` / `RULES.md`, in severity order.
 | D-8 | A guardian is a `ParentGuardian` person with an optional `User` login; access follows only `GuardianLink`; `Student.guardianId` deleted | `adr/0004-guardian-model.md`; fixes G-8 |
 | D-9 | Layer boundaries point inward; domain is framework-free; cross-module access via each `index.ts` | `src/modules/README.md` |
 
-**All three schema-blocking decisions are now resolved.** Phase 3 is unblocked. D-6, D-7 and D-8
-each fix a previously logged archived-schema defect, so the domain model and the contract
-divergences are now closed out rather than deferred.
+**All three schema-blocking decisions are now resolved.** D-6, D-7 and D-8 each fix a previously
+logged archived-schema defect, so the domain model and the contract divergences are now closed out
+rather than deferred.
+
+**Phase 3 is complete.** Every entity named in this model is implemented in `src/db/schema/` —
+145 tables across 22 domain modules, with 378 foreign keys and 364 check constraints, and a
+generated `relations.ts` that maps every declared foreign key to a `one`/`many` pair. The baseline
+migration `drizzle/0000_steady_johnny_blaze.sql` is generated, `db:check`-clean, and applied to the
+local database (2026-10-06).
+
+Three consequences of implementing this model are worth knowing, because they are not derivable from
+the prose above:
+
+- **Money follows the document, not the row.** `currency` sits on 14 money *roots* — fee structure,
+  invoice, payment, receipt, payment plan, concession, financial account, expense, budget, salary
+  structure, salary assignment, payroll run, payroll item, payroll payment — and the 8 money-bearing
+  child tables inherit it by joining one hop (`fee_invoice_lines` → `fee_invoices`, `ledger_entries`
+  → `financial_accounts`, and so on). ADR-0003 §3 says "every money column carries a currency code";
+  the implementation satisfies its intent without letting a document's own lines disagree. Read a
+  joined document, never a bare child row, to learn the currency.
+- **`outstandingAmount` genuinely does not exist** anywhere in the schema. Balance is computed.
+- **Not every reference is a foreign key, and every exception is now named.** Of 604 `uuid` columns,
+  153 are primary keys and 356 carry a foreign key; the remaining **95 are listed by group in
+  `schema-contract.test.ts`**, which asserts the list matches the schema exactly in both directions —
+  a bare column cannot ship without appearing in a named group where a reviewer sees it. 61 are
+  attribution columns (`approvedByUserId` and 60 siblings) recorded as bare uuids so an audit row
+  outlives the user who acted. 10 are polymorphic (`notifications.audienceId` and siblings with a
+  discriminator column). 2 close a module import cycle, 6 have an ambiguous target under `ADR-0002`
+  (a teacher may be `users.id` or `teachers.userId`), 2 form a loop with each other
+  (`jobs.scheduleId` ↔ `jobSchedules.lastJobId`), 1 has no single column to point at, and 1 is a
+  concurrency marker rather than a relationship. The remaining **12 are unexplained and believed to be
+  omissions** — `attendanceExceptions.institutionId`, `permissions.institutionId`,
+  `schedulePublishHistory.scheduleId`, `teacherLeaveBalances.academicSessionId`,
+  `teacherLeaveBalances.leaveTypeId`, `teacherWorkloadHistory.academicSessionId`,
+  `teacherAbsences.leaveRequestId`, and `journalTransactions.paymentId`,
+  `journalTransactions.payrollRunId`, `payments.depositedToAccountId`,
+  `payrollPayments.ledgerAccountId`, `payrollRuns.journalTransactionId` (these five were once
+  documented as cycle-breakers; the import graph shows no cycle) — where the same name carries a key
+  on other tables and
+  no comment gives a reason. The same-table supersession case is **resolved**: all eight such
+  pointers now carry a self-referencing foreign key — `set null` on seven of them, `restrict` on
+  `expenseHeads.parentHeadId` — and six carry a "not itself" check; `payments.reversesPaymentId` and
+  `journalTransactions.reversesTransactionId` have only a check that pairs the pointer with `status`.
+  `payrollAdjustments.correctsRecordId` stays bare because it is polymorphic.
 
 ### Still open
 

@@ -29,12 +29,12 @@ each leave the column lying. `RULES.md` §25 already states the design principle
 ## Decision
 
 **1. Storage type.** Money columns are PostgreSQL `numeric`, declared in the contract as
-`numeric(18,2)`. Never `float`, never a JS `number`. The Prisma 8 `pg/numeric@1` codec supports
-`precision` (1–1000) and `scale` (≥ 0) parameters, and `decimal` is accepted as an alias for the
-same codec.
+`numeric(18,2)`. Never `float`, never a JS `number`. *Originally justified against the Prisma 8
+`pg/numeric@1` codec; that ORM was never installed and the evidence is superseded — see
+Amendments.*
 
 **1a. There is no `Decimal` class in this stack, and the application value is a string.**
-Verified 2026-09-30 by reading the shipped codec in
+Originally verified 2026-09-30 by reading the shipped Prisma codec in
 `@prisma/orm-target-postgres@8.0.0-rc.12`:
 
 - `pgNumericDecode(wire)` returns the wire value unchanged when it is not a `number` — i.e. a
@@ -47,7 +47,8 @@ Verified 2026-09-30 by reading the shipped codec in
   `@prisma/client-runtime` is installed in this project.
 
 **Consequence:** exact decimal arithmetic cannot be delegated to the ORM. The application must own
-it, which is what the shared value type below is for.
+it, which is what the shared value type below is for. This conclusion was re-verified against the
+Drizzle + `pg` stack on 2026-10-06 and still holds — see Amendments.
 
 **2. One shared value type.** `src/shared/money/` exposes a `Money` type backed by **integer minor
 units at a fixed scale of 2**, converted to and from canonical decimal text at the storage
@@ -61,7 +62,7 @@ Money { amountMinor: bigint, currency: CurrencyCode }
 ```
 
 Arithmetic on `bigint` minor units is exact by construction, needs no third-party dependency, and
-round-trips to the canonical text the Prisma codec requires. **Every binary operation throws
+round-trips to the canonical text the driver requires. **Every binary operation throws
 `CurrencyMismatchError` when the two currencies differ.** This is the enforcement mechanism:
 `RULES.md` §29 demands exact decimal values, and a `Money` type makes an impure sum a thrown error
 rather than a silently wrong PKR/USD total. Placing it in `shared/` is deliberate — `RULES.md` §7.3
@@ -72,10 +73,13 @@ arithmetic. Two modules disagreeing about rounding is the failure this prevents.
 sanctioned way to produce a value for a `numeric` column, so an invalid amount cannot reach the
 driver.
 
-**3. Currency is explicit, never defaulted.** Every money column carries a `currency` code. There
+**3. Currency is explicit, never defaulted.** Every money document carries a `currency` code. There
 is no implicit institution default at the storage layer, because a report spanning two currencies
 must fail loudly rather than sum across them. A system-level default may be applied at the
 *boundary* when creating a record, and is written explicitly on that record.
+
+*Implemented refinement:* the column lives on the document root and child rows inherit it in one
+hop, rather than every amount row repeating it. See Amendments.
 
 **4. Balances are computed, not stored.** `outstandingAmount` is not a column. It is derived as
 `amount − discount − paid` at read time by the finance domain. If a read cost ever makes that
@@ -121,7 +125,8 @@ then, not pre-emptively.
 
 **Follow-on obligations**
 
-- Phase 3 gives every money column `Decimal` + `currency`, and makes `discount`/`paid` non-null.
+- Phase 3 gives every money column `numeric(18,2)` + a currency reachable in one hop, and makes
+  totals non-null. Done — 145 tables shipped; see Amendments.
 - Phase 2 Step 2.6 implements `src/shared/money/` with round-half-up tests, currency-mismatch
   rejection, and the G-10 invariant test.
 
@@ -133,12 +138,56 @@ than quietly widened.
 
 ---
 
+## Amendments
+
+**2026-10-06 — Phase 3 implementation.** The ADR's decision stands; three facts in it were written
+before the data layer was chosen and are corrected here rather than left to mislead.
+
+1. **The ORM is Drizzle, not Prisma.** Prisma was never installed. The §1a conclusion was
+   re-verified in the shipped packages, not assumed:
+   - `drizzle-orm/pg-core/columns/numeric.js` — `PgNumeric.mapFromDriverValue(value)` returns
+     `value` unchanged when it is a `string`, otherwise `String(value)`. The declared TS type is
+     therefore `string`, and there is no decimal object anywhere in the read path.
+   - `pg-types@2.2.0` — `builtins.js` maps `NUMERIC: 1700`, but `textParsers.js` registers **no**
+     parser for 1700, so a text-format result passes through as its canonical decimal text. The one
+     registered `parseNumeric` is in `binaryParsers.js` and only applies to binary-format results,
+     which this driver does not request.
+   - Net effect: unchanged. The application owns the arithmetic, which is what `Money` is for.
+
+2. **Currency is stored once per document, not once per amount.** §3 as originally written reads as
+   "every money column carries a `currency` code". The implementation puts `currency` on each money
+   *root* — 14 tables: `salary_structures`, `salary_assignments`, `fee_structures`, `fee_invoices`,
+   `payments`, `receipts`, `fee_payment_plans`, `fee_concessions`, `financial_accounts`, `expenses`,
+   `budgets`, `payroll_runs`, `payroll_items`, `payroll_payments`. The 8 money-bearing tables without the column
+   reach it by joining one hop — `fee_structure_items`, `fee_invoice_lines`, `payment_allocations`,
+   `fee_installments`, `ledger_entries`, `payroll_adjustments`, `bank_reconciliations`,
+   `payment_methods`. The intent of §3 is preserved and the drift risk is *lower*, because the
+   currency can no longer disagree with itself across the lines of one document.
+   `src/db/schema/schema-contract.test.ts` asserts every money column is `numeric(18,2)` and that each
+   money row reaches a currency within one hop, so the invariant is now enforced rather than merely
+   stated. Note the cost: reading the currency of a child row costs a join, and `MEMORY.md` §5 records
+   the parent for each of the eight so nobody has to rediscover it.
+
+3. **§5 and §6 are implemented as constraints, not only domain checks.** Required amounts are
+   `NOT NULL` (the `moneyAmount()` helper) and carry a `> 0` check where a zero or negative figure
+   would be a bug; genuinely optional figures such as `fee_structure_items.override_amount` or
+   `payments.overpayment_amount` are deliberately nullable. `outstandingAmount` exists nowhere in
+   the schema, and `receipts_number_key` makes `receipt_number` unique per institution. Of these,
+   only the `numeric(18,2)` shape and the one-hop currency rule are asserted by
+   `schema-contract.test.ts` — the rest is enforced by the migration itself and would surface as a
+   failed `pnpm db:migrate`, not as a failing test.
+
+**Unchanged and still open:** the scale-2 limitation below. Nothing in Phase 3 introduced a
+per-currency scale.
+
+---
+
 ## Rejected alternatives
 
 | Alternative | Why rejected |
 |---|---|
-| Integer minor units (e.g. paisa) | Rejected **as a storage choice** for a standalone reason: it locks each amount to one currency's scale and makes any currency change a data migration. It is nonetheless what `Money` uses *in memory*, because the Prisma 8 codec provides no decimal object to compute with. Storage stays `numeric`, so the migration objection does not apply. |
-| Rely on a Prisma `Decimal` class | **Does not exist in this stack.** The `pg/numeric@1` codec returns canonical decimal text and rejects non-text application values. Confirmed 2026-09-30 by reading the shipped codec. |
+| Integer minor units (e.g. paisa) | Rejected **as a storage choice** for a standalone reason: it locks each amount to one currency's scale and makes any currency change a data migration. It is nonetheless what `Money` uses *in memory*, because the driver provides no decimal object to compute with. Storage stays `numeric`, so the migration objection does not apply. |
+| Rely on a `Decimal` class from the ORM | **Does not exist in this stack.** The driver returns canonical decimal text and rejects non-text application values. Confirmed 2026-09-30 against Prisma, re-confirmed 2026-10-06 against Drizzle + `pg`. |
 | Add `decimal.js` | Unnecessary: `+`, `-`, comparison and proportional split are exact on `bigint` minor units. A general-purpose decimal library is a dependency this domain does not need. |
 | Plain `Decimal` per column, no wrapper | Fewest abstractions, but nothing stops two modules implementing different rounding, and nothing detects mixed-currency sums. Recreates G-10 at a different layer. |
 | Store `outstandingAmount` and reconcile in a job | Recreates G-10: the stored value drifts and a reconciliation pass becomes load-bearing for correctness. |
