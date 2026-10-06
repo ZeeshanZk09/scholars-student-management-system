@@ -3,11 +3,11 @@
  *
  * ## Why the URL is validated rather than asserted
  *
- * `db.ts` used `process.env["DATABASE_URL"]!`. The non-null assertion silences the compiler while
- * moving the failure somewhere worse: a missing variable becomes an opaque driver error at the
- * first query, or worse, a connection attempt to whatever `undefined` stringifies to. Validating
- * the value once, at the boundary where it enters the process, turns that into a named error
- * naming the missing key.
+ * `client.ts` used to read `process.env["DATABASE_URL"]!` directly. The non-null assertion
+ * silences the compiler while moving the failure somewhere worse: a missing variable becomes an
+ * opaque driver error at the first query, or worse, a connection attempt to whatever `undefined`
+ * stringifies to. Validating the value once, at the boundary where it enters the process, turns
+ * that into a named error naming the missing key.
  *
  * Only the shape is checked, not the reachability of the server. Whether the database is up is a
  * deployment question, and failing on it during a build would make builds depend on a live server.
