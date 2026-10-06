@@ -1,0 +1,30 @@
+# Build output and generated artifacts
+.next/
+out/
+build/
+node_modules/
+drizzle/
+playwright-report/
+test-results/
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Lockfiles (pnpm writes these; formatting them is noise)
+pnpm-lock.yaml
+package-lock.json
+
+# Project documentation and knowledge files are hand-maintained prose
+*.md
+
+# Agent/tooling roots — not product source
+.agency-agents/
+.agents/
+.claude/
+.cursor/
+.devin/
+.opencode/
+.vscode/
+.idea/
+
+# Static assets
+public/

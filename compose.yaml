@@ -1,0 +1,44 @@
+# Local development database for the Scholars Student Management System.
+#
+# Local development only. This is NOT a production configuration: the
+# credentials below are committed on purpose so a fresh clone works with one
+# command. Never point a deployed environment at this file.
+#
+#   docker compose up -d      # start
+#   docker compose down       # stop, keep data
+#   docker compose down -v    # stop and DESTROY the database volume
+#
+# Then copy .env.example to .env. The port is 5433 because 5432 is commonly
+# taken by another local Postgres; override with POSTGRES_PORT if needed.
+#
+# Port 5433 on the host intentionally matches the committed DATABASE_URL in
+# .env.example. If you change POSTGRES_PORT, change DATABASE_URL too.
+
+name: scholars-student-managment-system
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: scholars-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: scholars_sms_database
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # A named volume, not an anonymous one: `docker compose down` must never
+      # silently take the database with it.
+      - scholars_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Lets dependent services and scripts wait for a genuinely ready database
+      # instead of retrying against a booting Postgres.
+      test: ["CMD-SHELL", "pg_isready -U user -d scholars_sms_database"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  scholars_pgdata:
