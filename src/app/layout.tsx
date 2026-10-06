@@ -1,7 +1,9 @@
+import { ThemeProvider } from "next-themes";
+
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 import { Metadata } from "next";
-import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Scholars Student Management System",
@@ -14,12 +16,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="bg-background min-h-full antialiased">
+    <html lang="en" className="bg-background min-h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full flex flex-col antialiased">
-        <TooltipProvider>
-          <Toaster />
-          {children}
-        </TooltipProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <TooltipProvider>
+            <Toaster closeButton position="top-right" />
+            {children}
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

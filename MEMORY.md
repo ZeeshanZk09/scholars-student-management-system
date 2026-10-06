@@ -560,6 +560,14 @@ Future migration applications still require explicit user approval (§6, §17).
   import from `@base-ui/react/*`. **Do not introduce `@radix-ui/*`.**
 - **Icons are `@phosphor-icons/react`** (pinned `2.1.10`) with `Icon`-suffixed exports
   (`ListIcon`, `BellIcon`). `lucide-react` is **not installed**.
+- **Icons import via the `@/components/ui/icons` barrel (`"use client"` shim), never from the
+  package directly in server-reachable modules.** Phosphor's ESM calls `createContext` at module
+  scope, which crashes Next 16's RSC collect pass when a Server Component (or `@/lib/navigation`)
+  imports the package outright (verified 2026-10-06). The `"use client"` barrel turns each icon
+  into a client reference; `type IconProps` is re-exported too. **Every UI file that wraps
+  `@base-ui/react` needs `"use client"`** (button, badge, input, breadcrumb, navigation-menu now
+  carry it); pure-presentational files (card, skeleton, pagination, textarea) are server-safe
+  without it.
 - **`cn` comes from the `cn` package** (`src/lib/utils.ts` re-exports it). Neither `clsx` nor
   `tailwind-merge` is installed — do not import them.
 - **Tailwind v4**, driven by `@tailwindcss/postcss`. There is **no `tailwind.config.js`**; the
@@ -1158,8 +1166,8 @@ this file maps as: legacy Phase 0 = PHASES Phase 0; legacy Phase 1 (domain/ADRs)
 Phase 2 tasks 1–16; legacy Phase 2 (schema) = PHASES Phase 2; legacy Phase 3 (schema shipped)
 = PHASES Phase 2 complete; legacy Phase 4 (auth) = PHASES Phase 3.
 
-**Current phase:** Phase 4 — Roles, Permissions & Authorization (`COMPLETED`)
-**Current step:** Phase 5+ — feature phases (follow PHASES.md dependency order) — next
+**Current phase:** Phase 5 — Application Shell & Admin Foundation (`IN PROGRESS`)
+**Current step:** Phase 5 tasks done → gates green → MEMORY §17 updated → commit pending
 **Current sub-step:** Phase 4 closed out 2026-10-06: all 14 tasks implemented. Capability
 RBAC (ADR-0001) is now enforced at three independent layers — the **application** (`resolvePrincipal`
 → `requireUserPermission`/`canUser`; denied actions throw `ForbiddenError` before any mutation runs),
@@ -1167,6 +1175,12 @@ the **data** (a 27-key permission registry, 9 kernel roles, direct grants/denies
 super-admin — seeded, seed-verified idempotent), and the **UI** (`PermissionsProvider` +
 `useHasPermission`, plus server-rendered gates — hide, never authorize). Accessibility of the
 resolved principal to client components cannot be disabled without changing the server guard.
+Phase 5 ship 2026-10-06 (same session): `src/lib/navigation.ts` (declarative nav model + `navigationFor`
+with 8 unit tests), shell layout components (`src/components/layout/{app-shell,app-sidebar,app-header,mobile-bottom-nav}.tsx`),
+8 shared composites (`src/components/shared/{page-header,status-badge,stat-card,empty-state,error-state,loading-state,form-field,confirm-dialog,search-input,data-table}.tsx`),
+the route segments (`(app)/{layout,page,loading,error}`) and the dashboard's live-count page — see
+"Current sub-step" notes + §17 table. `"use client"` icon shim + directives added where the RSC
+collect pass demanded it (§8).
 
 ### Phase states (PHASES.md §6)
 
@@ -1177,29 +1191,30 @@ resolved principal to client components cannot be disabled without changing the 
 | Phase 2 — Database & Domain Foundation | `COMPLETED` | All 18 tasks. Task 17 done 2026-10-06: baseline `drizzle/0000_steady_johnny_blaze.sql` applied via `pnpm db:migrate` — 145 tables, 45 enums, one `drizzle.__drizzle_migrations` row; full gate re-run green. Regeneration traps documented in §13 |
 | Phase 3 — Authentication & Identity | `COMPLETED` | All 15 tasks done 2026-10-06. Auth.js v5 (ADR-0005); `src/modules/auth/{domain,application,infrastructure,ui}` + `src/auth.ts` + `/api/auth/[...nextauth]` + `(auth)` pages + `(app)` guard layout + `src/proxy.ts` + DAL. `@auth/drizzle-adapter` deliberately **not** installed (documented deviation). 59 auth unit tests + 3 e2e. Seed added (§12) |
 | Phase 4 — Roles, Permissions & Authorization | `COMPLETED` | All 14 tasks done 2026-10-06. `src/modules/authorization/{domain,application,infrastructure,ui}` + `src/lib/permissions.ts` + `(app)` layout/page wiring + `scripts/seed.ts` authorization part (27 permissions, 9 kernel roles, 72 grants, platform Mark-All super-admin grant — seed-verified idempotent). 24 authorization unit tests; total 207. Mask-002 (the smoke spec's stale title) fixed — anonymous `/` → login, smoke asserts `/login` now |
-| Phases 5+ | `NOT_STARTED` | Follow PHASES.md dependency order |
+| Phase 5 — Application Shell & Admin Foundation | `IN PROGRESS` | Started + effectively finished 2026-10-06: nav model (`navigationFor`, gating + `disabled` seams), shell (`app-shell/sidebar/header/mobile-bottom-nav`), 10 shared composites, role-aware dashboard with **honest** seeded counts only (users/roles/permissions — no invented student data), `(app)` loading/error segments. Gates re-verified (215 tests, build, 4 e2e). Remaining: commit + start Phase 6 (Institute & Academic Master) per dependency order |
+| Phases 6+ | `NOT_STARTED` | Follow PHASES.md dependency order |
 
 | Item | State |
 |---|---|
-| Completed | **Phase 0 entirely**; **Phase 1 entirely**; **Phase 2 entirely** (schema 145 tables/378 FKs/364 checks authored; baseline migration applied 2026-10-06; ADRs 0001–0004; D-1…D-9 recorded); **Phase 3 entirely** (auth, ADR-0005); **Phase 4 entirely** (capability RBAC end-to-end) |
-| In progress | none — no sub-step in flight |
-| Remaining | feature phases 5+ |
+| Completed | **Phase 0 entirely**; **Phase 1 entirely**; **Phase 2 entirely** (schema 145 tables/378 FKs/364 checks authored; baseline migration applied 2026-10-06; ADRs 0001–0004; D-1…D-9 recorded); **Phase 3 entirely** (auth, ADR-0005); **Phase 4 entirely** (capability RBAC end-to-end); **Phase 5 shell + admin foundation** (nav model, shell layout, 10 shared composites, dashboard, loading/error segments — commit pending) |
+| In progress | Phase 5 commit, then Phase 6+ opening |
+| Remaining | commit Phase 5, then feature phases 6+ |
 | Shared foundation shipped | `src/shared/{errors,money,logging,validation,authorization}` — each with an `index.ts` public surface and tests |
 | Database changes | `src/db/schema/` authored — **145 tables**, 378 FKs, 364 check constraints. **Applied to the local dev database**: 145 tables + 45 enums present in `public` |
 | Migration status | `drizzle/0000_steady_johnny_blaze.sql` generated, `db:check`-clean, **applied** 2026-10-06 (one `drizzle.__drizzle_migrations` row). Future `db:migrate` runs still need §59 approval |
-| Tests passing | 18 files / **207 tests** (`pnpm test`), including 59 auth-module, 24 authorization-module and 13 schema-contract tests; **E2E: 4 tests** (`pnpm test:e2e`, green — 1 smoke + 3 auth) |
+| Tests passing | 19 files / **215 tests** (`pnpm test`), including 59 auth-module, 24 authorization-module and 13 schema-contract tests (nav adds 8); **E2E: 4 tests** (`pnpm test:e2e`, green — 1 smoke + 3 auth) |
 | Tests failing | none |
-| Verification status | 2026-10-06 full gate green (Phase 4): `pnpm verify` (typecheck + lint + 207 tests + `db:check`) · `pnpm format:check` · `pnpm build` · `pnpm test:e2e` (4) — all pass |
-| Known issues | ESLint import-boundary enforcement for `src/modules/**` is documented but **not yet configured**; **no CI pipeline exists** (commands are CI-compatible); **no schema-drift gate exists** (Drizzle cannot do it) — see §3; **95 non-primary `uuid` columns carry no foreign key, and a contract test now guards every one of them by name** (see §5) — of those, 12 are unexplained and believed to be omissions (`permissions.institutionId` — its *purpose* (institution-scoped permissions, `ADR-0001`) is confirmed and exercised by Phase 4's seed, but the absent `REFERENCES institutions` is still a decision to make; `attendanceExceptions.institutionId`, `schedulePublishHistory.scheduleId`, `teacherLeaveBalances.{academicSessionId,leaveTypeId}`, `teacherWorkloadHistory.academicSessionId`, `teacherAbsences.leaveRequestId`, plus `journalTransactions.{paymentId,payrollRunId}`, `payments.depositedToAccountId`, `payrollPayments.ledgerAccountId`, `payrollRuns.journalTransactionId`) and need a decision, not an assumption. **E2E cold-compile note:** the first hit of `/api/auth/*` compiles the contacts route (zod + argon2 + drizzle) and can exceed the 5s `expect` timeout — `e2e/auth.spec.ts` warms the route in `beforeAll` |
-| Gates | `pnpm verify` clean · `pnpm format:check` clean · `pnpm build` succeeds · `pnpm test:e2e` 4 passed |
+| Verification status | 2026-10-06 full gate green (Phase 5): `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnpm test` (215) · `pnpm build` (Next 16.3.6, production) · `pnpm test:e2e` (4) — all pass |
+| Known issues | ESLint import-boundary enforcement for `src/modules/**` is documented but **not yet configured**; **no CI pipeline exists** (commands are CI-compatible); **no schema-drift gate exists** (Drizzle cannot do it) — see §3; **95 non-primary `uuid` columns carry no foreign key, and a contract test now guards every one of them by name** (see §5) — of those, 12 are unexplained and believed to be omissions (`permissions.institutionId` — its *purpose* (institution-scoped permissions, `ADR-0001`) is confirmed and exercised by Phase 4's seed, but the absent `REFERENCES institutions` is still a decision to make; `attendanceExceptions.institutionId`, `schedulePublishHistory.scheduleId`, `teacherLeaveBalances.{academicSessionId,leaveTypeId}`, `teacherWorkloadHistory.academicSessionId`, `teacherAbsences.leaveRequestId`, plus `journalTransactions.{paymentId,payrollRunId}`, `payments.depositedToAccountId`, `payrollPayments.ledgerAccountId`, `payrollRuns.journalTransactionId`) and need a decision, not an assumption. **E2E cold-compile note:** the first hit of `/api/auth/*` compiles the contacts route (zod + argon2 + drizzle) and can exceed the 5s `expect` timeout — `e2e/auth.spec.ts` warms the route in `beforeAll`. **Next 16 RSC collect trap:** importing `@phosphor-icons/react` (or any `@base-ui/react`-wrapping file) without the `"use client"` shim/directive crashes `next build` during page-data collection with `createContext is not a function` — §8 |
+| Gates | `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnpm test` (215) · `pnpm build` · `pnpm test:e2e` (4) — all green |
 | Architectural decisions | D-1 authorization = capability RBAC + explicit scope (ADR-0001); D-2 per-session placement; D-3 admission separate from student; D-4 lifecycle vs archival split; D-5 actors split into assigned roles and derived bindings; D-6 layer boundaries in `src/modules/README.md`; D-7 money = `numeric(18,2)` + explicit currency, computed balance, no decimal dep (ADR-0003); D-8 teacher = optional User + Teacher profile + TeachingAssignment (ADR-0002); D-9 guardian = ParentGuardian person + optional User, access only via GuardianLink, no `Student.guardianId` (ADR-0004); D-10 auth = Auth.js v5, Credentials + JWT strategy with server-side `sessions` rows as the authoritative revocation gate, Argon2id via `@node-rs/argon2`, no `@auth/drizzle-adapter` (ADR-0005); D-11 authorization = capability RBAC enforced in the application layer (`resolvePrincipal` → `requireUserPermission`/`canUser`, `ForbiddenError` on denied actions), with the UI (`PermissionsProvider`/`useHasPermission`) as a hide-not-authorize convenience and the DB kernel roles as defaults — super-user expressed as data (platform `super-admin` grant), not a boolean (ADR-0001) |
 | Infra decisions (this session) | Prettier config (`.prettierrc`/`.prettierignore`, `eslint-config-prettier` wired); Node pinned (`.nvmrc` = 26.8.1, `engines >=26.8.1`); tsconfig hardened with constitution flags (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `noUnusedLocals`, `noUnusedParameters`) — 4 resulting errors fixed in `playwright.config.ts`, `src/components/ui/{scroll-area,sonner,calendar}.tsx`; Playwright `webServer.command` = `node node_modules/next/dist/bin/next dev` (pnpm-spawned `next dev` is SIGKILLed on teardown and orphans port 3000); `tsx` added for `db:seed`; `src/proxy.ts` replaces the deprecated `middleware.ts` (Next 16); authorization module mirrors the auth module's domain/application/infrastructure/ui layering; `resolvePrincipal` is `React.cache`-d on the `institutionId` primitive (per-request, one live delegation load); seed's `SELECT`-then-insert (drizzle `onConflictDoUpdate({target})` cannot express functional-index keys like `lower(email)`, and `db:generate`/`.sql` regeneration traps are unchanged — §13) |
 | Blockers (§59 — user decisions required) | **All three resolved 2026-10-06.** 1. ~~Apply the baseline migration~~ → applied (`pnpm db:migrate`, 145 tables + 45 enums). 2. ~~Auth mechanism~~ → **Auth.js (NextAuth v5)** approved. 3. ~~Commit the working tree~~ → committed across 6 commits (`a058bda`…`0750f26`, on top of `f8b256d`). Standing rule: future `db:migrate` applications and any auth package outside Auth.js still need explicit approval |
 | Step 2.3 verified | Connection works (PG 17, `public` exists, **145 tables, 45 enums** — baseline applied); migrations are plain `.sql` files; `db:generate` writes files but never the DB — see §13. Env validation added (`src/db/env.ts`); **no transaction helper is needed — `db.transaction(fn)` already exists**, see §13 |
 | Step 2.6 authorization scope | Typed `PERMISSION_KEYS` (every key cites its PRD/RULES source), `Principal`, `requirePermission`, `requireInstitutionScope`, `requireSelfScope`. Guardian/teacher scope and the state check are deliberately left to the application and domain layers |
 | Required user actions | none outstanding — standing §59 approvals only (future `db:migrate`, non-Auth.js auth packages) |
-| Last verified state | 2026-10-06: frozen install, `pnpm verify` (207 tests), `pnpm format:check`, `pnpm build`, `pnpm test:e2e` — all green **after** Phase 4 completed; runtime proof: superadmin sign-in shows the permission-aware home (4/4 capabilities Granted, resolved live); working tree clean and committed |
-| Exact next action | Read the next PHASES section → begin the first feature phase in dependency order (Phase 5+) → verify per task |
+| Last verified state | 2026-10-06: `pnpm typecheck` + `lint` + `format:check` + `test` (215) + `build` + `test:e2e` (4) all green **after** Phase 5; runtime proof: superadmin sign-in shows the permission-aware role-aware dashboard (live seeded counts, capabilities as badges, module map with Planned seams); working tree has the Phase 5 feature set staged for commit |
+| Exact next action | Commit Phase 5, then read the next PHASES section → begin Phase 6 in dependency order → verify per task |
 
 ### Environment snapshot
 
