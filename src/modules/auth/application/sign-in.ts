@@ -78,7 +78,10 @@ export async function signIn(deps: SignInDeps, input: SignInInput): Promise<Sign
   const user = await store.findForLogin(input.email.trim());
   if (user === null) {
     // No row to update, so an attacker cannot distinguish "no such user" from "wrong password"
-    // by watching `failed_login_count` — there is nothing to watch.
+    // by watching `failed_login_count` — there is nothing to watch. Also spend one Argon2
+    // verification (against a dummy hash, result discarded) so the two paths cannot be told
+    // apart by wall-clock time either (`SECURITY.md` §62).
+    await store.verifyDummyCredential(input.password);
     return { ok: false, reason: "invalid_credentials" };
   }
 

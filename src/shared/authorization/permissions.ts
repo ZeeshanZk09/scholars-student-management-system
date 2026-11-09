@@ -51,10 +51,13 @@ export const PERMISSION_KEYS = [
   "guardians.view",
   "guardians.manage",
 
-  // PRD 5.2/5.3 — admissions.
+  // PRD 5.2/5.3 — admissions. Approving (and rejecting/converting) is separated from recording
+  // and editing an application: SECURITY.md §14 lists `admissions.approve` as its own key, so a
+  // receptionist who files paperwork cannot also decide it.
   "admissions.view",
   "admissions.create",
   "admissions.update",
+  "admissions.approve",
 
   // RULES 19 and PRD 5.4 — attendance.
   "attendance.view",
@@ -68,10 +71,51 @@ export const PERMISSION_KEYS = [
 
   // RULES 19 and PRD 5.5 — fees and payments. A refund is separated from recording a payment
   // because it moves money the school did not earn, so it needs its own grant and its own audit.
+  // PRD MODULE 6 splits the rest three ways: reading (view), configuring the price list and
+  // generating invoices (manage — the automated calculation path), and moving an issued invoice's
+  // economics by hand (adjust — concessions, deferrals, corrections; RULES §19 `fee.adjust`).
+  // Keeping adjust separate from record means a cashier who takes money cannot silently rewrite
+  // what was owed, and RULES §38's "controlled adjustments rather than destructive rewriting"
+  // has a key to hang its audit on.
   "fees.view",
   "fees.record",
+  "fees.adjust",
+  "fees.manage",
   "fees.refund",
   "payments.record",
+
+  // PRD 5.5 / MODULE 7 — the institute-wide ledger. Reading the ledger is deliberately separate
+  // from reading fees (`fees.view`): a cashier who reconciles a till does not automatically get
+  // the institution's whole income-and-expense picture. `finance.record` books a movement
+  // (expense, income), `finance.manage` approves one, and `finance.adjust` corrects posted
+  // history — which, per ARCHITECTURE.md §54, is always a *reversal*, never an edit, so the
+  // key that can unwind the ledger is its own grant with its own audit.
+  "finance.view",
+  "finance.record",
+  "finance.manage",
+  "finance.adjust",
+
+  // PRD MODULE 8 / PHASE 11 — the employee (HR) record. Reading the staff directory
+  // (`employees.view`) is deliberately separate from creating or editing one: a floor in-charge
+  // needs to see who is on shift without being able to hire. `employees.manage` gates the
+  // money-adjacent and structural acts — salary structures, salary assignments and status
+  // transitions (resign/terminate/retire) — because those decide what a person is paid and
+  // whether they still work here, so they get their own grant with their own audit.
+  "employees.view",
+  "employees.create",
+  "employees.update",
+  "employees.manage",
+
+  // PRD MODULE 9 / PHASE 12 — payroll. Reading a run is not the same as calculating it, and
+  // calculating it is not the same as approving it: `ARCHITECTURE.md` §20 separates configuration,
+  // calculation, adjustment and the final record, and each step is its own grant so a payslip
+  // cannot be produced, amended and settled by an account that only needs to see it. `` is the
+  // accountant's alone (`PRD.md` MODULE 10 makes bulk salary payment an accountant act), which is
+  // why the run's status machine has a `paid` step at all.
+  "payroll.view",
+  "payroll.calculate",
+  "payroll.approve",
+  "payroll.process",
 
   // PRD 5.1/5.5 — reporting, scoped to an institution rather than global.
   "reports.view",

@@ -9,7 +9,7 @@
  * server already decided — hide, never authorize (`RULES.md` §19).
  */
 import { NAV_GROUPS, navigationFor } from "@/lib/navigation";
-import { getCurrentPrincipal } from "@/lib/permissions";
+import { getCurrentPrincipal } from "@/lib/permissions-server";
 import { requireSession } from "@/lib/dal";
 import { hasPermission } from "@/shared/authorization";
 import { PermissionsProvider } from "@/modules/authorization/ui/permissions-context";
@@ -17,7 +17,7 @@ import { AppShell } from "@/components/layout/app-shell";
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const session = await requireSession();
-  const principal = await getCurrentPrincipal(null);
+  const principal = await getCurrentPrincipal();
   const permissions = [...(principal?.permissions ?? [])];
 
   const navGroups = navigationFor(

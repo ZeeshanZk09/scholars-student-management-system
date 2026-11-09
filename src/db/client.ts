@@ -44,3 +44,18 @@ if (process.env["NODE_ENV"] !== "production") {
  * handed a transaction without caring which it is.
  */
 export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Anything a repository accepts: the pooled client, or the scope handed to `db.transaction`.
+ *
+ * This is the cross-module transaction seam: a store re-created over a `DbLike` runs *inside* the
+ * caller's transaction (its own nested `transaction` becomes a savepoint), which is what lets
+ * `src/modules/admission` convert an application — student, guardian, placement, enrollment and
+ * the admission row itself — as one atomic write without either module reaching into the other's
+ * internals.
+ *
+ * A union rather than `typeof db` alone: `PgTransaction` shares the full query surface
+ * (`PgDatabase`) but not the `$client` property the pooled instance carries, so neither member
+ * alone covers both scopes.
+ */
+export type DbLike = typeof db | DbTransaction;

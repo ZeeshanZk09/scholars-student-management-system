@@ -63,6 +63,36 @@ describe("PERMISSION_KEYS", () => {
     expect(PERMISSION_KEYS).toContain("results.publish");
   });
 
+  it("separates approving an admission from recording one (SECURITY.md §14)", () => {
+    // Filing paperwork and deciding it are different trusts: the key exists on its own so a
+    // receptionist-level grant can file applications without being able to convert them.
+    expect(PERMISSION_KEYS).toContain("admissions.approve");
+  });
+
+  it("separates the ledger from the till, and a reversal from a booking", () => {
+    // Reading fees is not reading the institution's finances; booking a movement is not
+    // correcting posted history (ARCHITECTURE.md §54 — a correction is a reversal).
+    expect(PERMISSION_KEYS).toContain("finance.view");
+    expect(PERMISSION_KEYS).toContain("finance.record");
+    expect(PERMISSION_KEYS).toContain("finance.manage");
+    expect(PERMISSION_KEYS).toContain("finance.adjust");
+    expect(PERMISSION_KEYS).not.toContain("fees.ledger");
+  });
+
+  it("separates the money-adjacent HR acts from reading the staff directory", () => {
+    // PRD MODULE 8 / PHASE 11: a floor in-charge may see who is on shift (`employees.view`)
+    // without being able to hire, edit, or move someone's salary and status — salary structures,
+    // assignments and resign/terminate transitions are their own grant with their own audit.
+    expect(PERMISSION_KEYS).toContain("employees.view");
+    expect(PERMISSION_KEYS).toContain("employees.create");
+    expect(PERMISSION_KEYS).toContain("employees.update");
+    expect(PERMISSION_KEYS).toContain("employees.manage");
+
+    const holder = principal({ permissions: new Set<PermissionKey>(["employees.view"]) });
+    forbidden(() => requirePermission(holder, "employees.update"));
+    forbidden(() => requirePermission(holder, "employees.manage"));
+  });
+
   it("recognises its own keys and rejects near-misses", () => {
     expect(isPermissionKey("attendance.mark")).toBe(true);
 

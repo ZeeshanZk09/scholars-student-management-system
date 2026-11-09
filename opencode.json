@@ -13,17 +13,20 @@
         "-i",
         "--rm",
         "--pull=always",
+        "--network",
+        "host",
         "-e",
         "SONARQUBE_URL=http://localhost:9000",
         "-e",
-        "SONARQUBE_TOKEN",
+        "SONARQUBE_TOKEN=squ_fbb1bc26019456b6f46260fcab289f9475efcc7d",
         "sonarsource/sonarqube-mcp"
       ],
       "environment": {
-        "SONARQUBE_URL": "http://localhost:9000"
+        "SONARQUBE_URL": "http://localhost:9000",
+        "SONARQUBE_TOKEN": "squ_fbb1bc26019456b6f46260fcab289f9475efcc7d"
       },
       "enabled": true,
-      "timeout": 30000
+      "timeout": 180000
     },
     "motion": {
       "type": "remote",

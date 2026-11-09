@@ -16,8 +16,8 @@ Everything below is a router. The verified knowledge lives in one place.
 | You need | Read |
 |---|---|
 | Versions, architecture, traps, open questions | **`MEMORY.md`** (repo root) — the source of truth |
-| Any work in this repo | `.opencode/skills/scholars-project/SKILL.md` |
-| Anything database (schema, migrations, queries) | `.opencode/skills/drizzle-workflow/SKILL.md` — read it before touching `src/db/` |
+| Any work in this repo | `.agents/skills/scholars-project/SKILL.md` (or `.opencode/skills/scholars-project/SKILL.md`) |
+| Anything database (schema, migrations, queries) | `.agents/skills/drizzle-workflow/SKILL.md` (or `.opencode/skills/drizzle-workflow/SKILL.md`) — read it before touching `src/db/` |
 | UI work | `components.json` + `src/app/globals.css` tokens |
 | Executable workflow, change-safety, approved stack | `.opencode/ai-workflow.json` |
 | Full skill catalogue and how to add one | `skills-inventory.md` |

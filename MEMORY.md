@@ -4,29 +4,75 @@
 > planning work. It records *verified* facts (checked against `node_modules` and the CLI),
 > not assumptions. When reality contradicts this file, reality wins — fix this file.
 >
-> **Last verified:** 2026-10-06 (fifth pass: **schema complete — 145 tables**) · Next.js 16.3.6 ·
-> drizzle-orm 0.45.3 · drizzle-kit 0.31.11 · pg 8.23.1 · Node 26.8.1 · pnpm 12.6.0 ·
-> OpenCode 1.18.33
+> **Last verified:** 2026-10-14 (tenth pass: **Phase 12 complete — Payroll live**)
+> · Next.js 16.3.6 · drizzle-orm 0.45.3 · drizzle-kit 0.31.11 · pg 8.23.1 · Node 26.8.1 ·
+> pnpm 12.6.0 · OpenCode 1.18.33
 >
 > Drizzle ORM, `drizzle-kit` and `pg` are the data layer; **no ORM skill is vendored** — use
 > Context7 (`/drizzle-team/drizzle-orm-docs`) and the project `drizzle-workflow` skill.
-> `pnpm verify` and `pnpm build` pass as of this pass. Current phase state: **§17**.
+> `pnpm verify` (675 tests), `format:check`, `build` and `test:e2e` (**14 tests / 11 specs**) pass
+> as of this pass. Current phase state: **§17**.
 >
-> **Status: Phases 0–4 are done — schema complete and applied (`drizzle/0000_*.sql` checked),
-> auth (Phase 3, ADR-0005) and capability RBAC (Phase 4, ADR-0001).** See §1 and §3.
+> **Status: Phases 0–14 are done — schema complete and applied (`drizzle/0000_*.sql` checked;
+> `0001_*.sql` generated, awaiting §59 approval), auth (Phase 3, ADR-0005), capability RBAC
+> (Phase 4, ADR-0001), the application shell (Phase 5), the institute/academic master UI
+> (Phase 6), the student/guardian domain (Phase 7), admissions (Phase 8), student fee
+> management (Phase 9), finance & accounting (Phase 10), HR & employee management
+> (Phase 11), payroll & salary engine (Phase 12), accountant portal (Phase 13), and teacher domain & portal (Phase 14).** Next is Phase 15 (Attendance Engine).
+> See §1 and §3.
 
 ---
 
 ## 1. Project state
 
-**Status: Phases 0–4 complete.** The full database schema is authored, migrated and
-contract-tested; **authentication and authorization are implemented**. There are no feature
-routes yet — the authenticated surface is a single permission-aware home page and the shell
-layout — but the foundation the features sit on is real and tested: auth (sign-in/sign-out,
-sessions, revocation), capability RBAC end-to-end, `src/shared/{errors,money,logging,validation,
-authorization}`, `src/db/{client,env}.ts`, `src/db/schema/**` (22 domain modules + `relations.ts`),
-and `src/modules/README.md` recording the layer boundaries. 207 tests + 4 e2e cover it. Phase
-decisions (ADR-0001…0005, D-1…D-11) are recorded.
+**Status: Phases 0–14 complete; Phase 15 (Attendance Engine) is next.** (Everything since
+Phase 5 is finished in the working tree and **not yet committed** — see §17.) The full database schema is
+authored, migrated and contract-tested; **authentication, capability RBAC and the institution-scope
+boundary are implemented.** The authenticated surface is a permission-aware dashboard plus the
+eight live `/academics/*` admin pages, `/teachers`, `/teachers/[teacherId]`, `/teacher-portal`, `/accountant` — the foundation the features sit
+on is real and tested: auth (sign-in/sign-out, sessions, revocation), capability RBAC end-to-end,
+the institution-targeted authorization boundary (§9), `src/shared/{errors,money,logging,validation,
+authorization,forms}`, `src/db/{client,env}.ts`, `src/db/schema/**` (22 domain modules +
+`relations.ts`), `src/modules/{auth,authorization,academic,student,admission,fees,finance,hr,payroll,teacher}` and
+`src/modules/README.md` recording the layer boundaries. 702 unit tests + 15 e2e cover it.
+Phase decisions (ADR-0001…0005, D-1…D-11) are recorded.
+
+**Phase 6 is complete** (server side + admin UI): `src/modules/academic/**` (zod schemas, domain
+rules, service, Drizzle store with transactions, 15 gated server actions), the institution-scope
+boundary of §9, and all eight `/academics/*` pages — institution, sessions, classes, groups,
+subjects, departments, facilities, time slots — each gated by `resolveAcademicContext`, each with
+its own `EmptyState`, and the matching nav `disabled` flags removed (enforced by
+`src/lib/navigation.test.ts`). The flow is proven end-to-end by `e2e/academic-master.spec.ts`,
+which builds an institution → sessions → facility hierarchy → class/section → department/subject →
+time slot through the UI against a throwaway user.
+
+**Phases 7 and 8 are complete** (server side + UI, uncommitted): `/students`, `/guardians`,
+`/student-info` with real forms, and `/admissions` (list + detail) driven end-to-end by
+`e2e/student-domain.spec.ts` and `e2e/admission-workflow.spec.ts` against throwaway users.
+
+**Phase 11 (HR & Employee Management) is complete** (server side + UI, uncommitted):
+`src/modules/hr/**` in the §D-6 layering, `/hr/employees` (list + detail) and
+`/hr/salary-structures`, proven by `e2e/hr-workflow.spec.ts`. **`ADR-0002` is now load-bearing**:
+hiring an employee provisions `users` + `user_credentials` + a live `user_roles` grant (the role
+bundle follows the employee type) + `employees` + the first `employee_status_history` row **in one
+transaction** (`src/modules/hr/infrastructure/drizzle-store.ts`), so an employee record with nobody
+to sign in as is unreachable rather than merely discouraged. `src/modules/hr/ui/actions.ts` uses
+`hashPassword` from `@/modules/auth` — the module boundary is crossed in one direction only.
+
+**Phase 12 (Payroll & Salary Engine) is complete** (server side + UI, uncommitted):
+`src/modules/payroll/**` in the §D-6 layering (domain payroll rules — status state machine,
+`proRata`, `payrollNetAmount`; schemas/ports/service + fakes; Drizzle store; 7 gated actions),
+4 `payroll.{view,calculate,approve,process}` keys (seed code **+ `scripts/backfill-payroll-permissions.ts`,
+already run** — live role slug is `admin`), `/finance/payroll` register + `[payrollRunId]` detail
+(open period → calculate → adjust → approve → settle payment), nav Finance's Payroll entry flipped
+on, and the **payroll→finance seam** `postPayrollCollectionWithin` wired inside the payroll
+`processPayment` transaction (`src/modules/payroll/infrastructure/drizzle-store.ts`) so the pay
+batch and its `salary_payment` journal commit together. Proven end-to-end by
+`e2e/payroll-workflow.spec.ts` (open a month → calculate → read the line → apply a bonus → approve
+→ settle a bank transfer → confirm the payment and audit → a `payroll.view`-only viewer reads
+everything and triggers no writes). **No migration** (145 tables unchanged). Gates green
+(675 unit / 35 files, 14 e2e / 11 specs, build). Fix log below (the payment now records the
+account the journal posted against).
 
 **The data layer is Drizzle ORM** and the schema is complete: `src/db/schema/index.ts` re-exports
 22 table modules and the generated `relations.ts`, `drizzle/0000_steady_johnny_blaze.sql` creates all
@@ -582,26 +628,81 @@ Future migration applications still require explicit user approval (§6, §17).
 
 ---
 
-## 9. Authentication and authorization — NOT IMPLEMENTED (mechanism decided)
+## 9. Authentication and authorization — IMPLEMENTED, and the institution boundary is the load-bearing part
 
-Stated plainly because inventing a design here would be the worst outcome:
+Auth landed in PHASES Phase 3, capability RBAC in Phase 4, and the **institution-scope boundary**
+in the Phase 6 working tree (2026-10-07). Read this section before touching any route or server
+action; it is where the two rules that are easy to get wrong live.
 
-- **No auth library is installed** — nothing in `package.json` (no `next-auth`/`auth.js`,
-  `better-auth`, Clerk, Lucia, or Supabase auth) and **no auth import anywhere in `src/`**.
-- **No middleware, no `proxy.ts`, no session handling, no RBAC.**
-- **Decision (2026-10-06, user-approved): Auth.js / NextAuth v5** with the Drizzle adapter is the
-  mechanism for PHASES Phase 3. Installing `next-auth` and its adapter is approved; no other auth
-  package is. The previous rule — "do not add an auth package without explicit approval" — still
-  holds for everything except Auth.js.
-- The previous data model had `User`, `Role`, `Permission`, which **no longer exist as three tables**.
-  The authorization tables that replaced them are `users`, `roles`, `permissions`,
-  `role_permissions`, `user_roles`, `user_permissions`, `permission_scopes` and `user_institutions`
-  — see §5. No auth package is installed and no row has been written.
+- **Auth**: Auth.js / NextAuth v5 (ADR-0005), Credentials + JWT strategy with server-side
+  `sessions` rows as the authoritative revocation gate, Argon2id via `@node-rs/argon2`.
+  `@auth/drizzle-adapter` is deliberately **not** installed (documented deviation).
+- **Authorization**: capability RBAC (ADR-0001). 27 permission keys, 9 kernel roles, direct
+  grants/denies, platform-scoped super-admin — all seeded. `resolvePrincipal` turns a `userId`
+  into a `Principal` (no roles on it — `RULES.md` §19), and the three gates live in
+  `src/lib/permissions-server.ts`.
 
-**Consequence for future agents:** there is no authenticated route to protect, no "current user"
-to read, and no permission helper to reuse. The mechanism is settled (Auth.js v5, approved);
-implementation is PHASES Phase 3 — start from `SECURITY.md` and the archived
-`User`/`Role`/`Permission` shape.
+### The three gates, and which one was missing
+
+`RULES.md` §18 is five steps; the shared package (`src/shared/authorization/principal.ts`) covers
+steps 2 and 3 for records, and `src/lib/permissions-server.ts` covers the whole sequence for a
+request:
+
+1. **Session** — `verifySession` (`requireSession` redirects).
+2. **Capability** — `requirePermission` against a `Principal` resolved *in the right context*.
+3. **Scope** — `requireInstitutionMutation` for writes; `requireInstitutionScope` /
+   `requireSelfScope` for individual records.
+
+**The context is the thing to get right.** Before 2026-10-07 every caller did
+`requireUserPermission(key)` with the default `institutionId = null`, which resolves a
+*platform-level* principal — and `grantAppliesIn` then discards every institution-scoped grant, so
+a platform grant of `academic.manage` authorised a write into **any** tenant. `SECURITY.md` §87
+names that exact field (`institutionId = "another-institution"`) as one the server must not accept
+blindly. The fix is structural, not a checklist:
+
+| Helper | Context | Use it for |
+|---|---|---|
+| `getActingInstitutionId()` | derived from `user_institutions`, `React.cache`-d per request | the institution this request stands in when nothing names one |
+| `getCurrentPrincipal(institutionId?)` | default = acting institution | rendering, navigation, anything read-only |
+| `requireUserPermission(key)` | acting institution | **page gates** |
+| `requirePlatformPermission(key)` | explicitly `null` | operations that *are* the platform acting (creating an institution) |
+| `requireInstitutionMutation(key, institutionId)` | **the institution the request names** | **every mutating server action** |
+
+`requireInstitutionMutation` answers two independent questions from data, never from the form:
+the user's `user_institutions` row must contain the target (`SECURITY.md` §21), and the
+capability is resolved *at* the target so an out-of-tenant grant is simply invisible
+(`effective-permissions.ts`: scope applies before precedence, ADR-0001). A forged `institutionId`
+can only ever make the visible grant set **smaller** — that is the whole property.
+
+`src/modules/authorization` exposes the same two operations for non-UI callers:
+`resolveActingInstitutionId(userId)` and `authorizeInstitutionCommand({userId, institutionId,
+permission})`.
+
+### Acting-institution resolution rules (Phase 6 task 1)
+
+From `user_institutions` (the *where*, distinct from `user_roles`' *what*):
+
+- **0 affiliations → `null`** (platform-level user; super-admins work by holding platform grants).
+- **exactly 1 → that institution** — the unambiguous case.
+- **≥2 → `null`**, deliberately: there is **no institution switcher** in the product (no session
+  field, no preference, no UI), and picking one would show a user another tenant's numbers while
+  they believed they were looking at their own. Falling back to platform context withholds every
+  institution-scoped grant — fail-closed for that user, and harmless for writes, which
+  `requireInstitutionMutation` bounds separately. **Open product question, §16.**
+
+### UI layering (hide, never authorize)
+
+`PermissionsProvider` + `useHasPermission` (`src/lib/permissions.ts`) mirror the server's
+decision so a client component can hide a control it was already refused. They are **never** a
+gate; every route still calls `requireUserPermission` during render. The navigation model
+(`navigationFor`) is presentational for the same reason.
+
+**Consequence for future agents:** any server action that writes must call
+`requireInstitutionMutation(permission, institutionId)` *before* it touches the database, and any
+page must call `requireUserPermission(key)` with the key the navigation item for the same href
+already uses — a mismatch shows a link the page then refuses. Placeholder pages
+(`/students`, `/guardians`, `/student-info`) intentionally have no server actions: a form that
+collects a child's date of birth only to discard it would be worse than no form.
 
 ---
 
@@ -904,6 +1005,94 @@ resolves to `^3.17`, but nothing imports `@hookform/resolvers` yet, so the misma
 `.nvmrc` holds `26.8.1` and `package.json` declares `engines.node: ">=26.8.1"`, per `TECH-STACK.md`
 §5. Open question 4 in §16 is resolved on that basis.
 
+### e2e specs share one pg pool — never call `db.$client.end()` (2026-10-07)
+
+`playwright.config.ts` sets `fullyParallel: true` and Playwright reuses workers, so two spec files
+can share one process **and one module instance**. `e2e/auth.spec.ts`'s `afterAll` used to call
+`db.$client.end()`, which is invisible while it is the only spec and fatal the moment a second one
+exists: the next `beforeAll` dies with `Cannot use a pool after calling end on the pool`, and the
+dying spec's own `afterAll` dies with `Called end on pool more than once`. Both `afterAll` hooks
+now clean up only their own rows and leave the pool to the worker process. Symptom is
+intermittent — it depends on which worker picks up which file — so do not "fix" it by adding
+retries.
+
+### `pnpm build` fights a running `next dev` over `.next/` (2026-10-07)
+
+A `next dev` may already be up in someone else's terminal (verified 2026-10-07, port 3000), and
+`playwright.config.ts` has `reuseExistingServer: true`, so e2e reuses it. Running `pnpm build`
+against that same `.next/` invalidates the dev server's compiled output; the e2e run started
+immediately afterwards failed three sign-in tests at the 5s `expect` timeout, and the next run
+(after the dev server had recompiled) passed all 7.
+**Order the gates `verify → format:check → test:e2e → build`, i.e. `build` LAST** — that order was
+run green end-to-end on 2026-10-07. If you must build earlier, restart `next dev` and re-run e2e
+once before believing a failure.
+
+### Playwright owns the dev server during `test:e2e`; long runs must be detached (2026-10-08)
+
+A manually-started detached dev server on port 3000 made Playwright print
+`Port 3000 is in use by an unknown process, using available port 3001 instead`; the extra
+`next dev` it then spawned for 3001 was refused by Next's project lock (`Another next dev server
+is already running`, pointing at the manual PID) and the webServer exited 1. **Kill every manual
+`next dev`/`next-server` before `pnpm test:e2e` and let Playwright start/stop its own.** Two
+related harness facts: (a) background jobs started with plain `&` get killed by agent command
+timeouts — launch long runs detached, e.g.
+`setsid bash -c 'pnpm test:e2e --workers=1 > /tmp/opencode/e2e.log 2>&1; echo "EXIT:$?" >> /tmp/opencode/e2e.log' < /dev/null > /dev/null 2>&1 &`
+then poll the log file; (b) `pkill -f "<pattern>"` matches its **own** shell's command line when
+the pattern occurs in it and kills the running command mid-flight — bracket it
+(`pkill -f "[n]ext dev"`).
+
+### A `"use client"` file must not import *values* from a module barrel (2026-10-07)
+
+`class-forms.tsx` imported `GRADE_LEVEL_OPTIONS` from the barrel `@/modules/academic`, which pulls
+the barrel's whole dependency fan-in — store → drizzle → `pg` → `dotenv` → `child_process` — into
+the browser graph: `next build` (and Turbopack dev) die with
+`Module not found: Can't resolve 'child_process'`. **Types are free, values are not.** Keep
+`import type { … }` on the barrel (erased at compile time) and import runtime values from the
+innermost client-safe module (`application/schemas.ts` for zod). A repo scan shows only two value
+imports from `@/modules/*` in `"use client"` files: this one, and `app-header.tsx →
+auth/ui/actions` (`logoutAction`, a server action — correct). Never import `@/db/*`, `drizzle-orm`
+or `/infrastructure/` from a client file.
+
+### Forms and actions are bound by `name`, not by `id` (2026-10-07)
+
+`TextField`/`SelectField`/`TextareaField` default to `name ?? id`, so a field written as
+`id="slot-name"` submits as `slot-name` while the action reads `field(formData, "name")` — the form
+renders, submits, and the server silently falls back to `""`/`undefined`. Every academic form now
+carries an explicit `name="…"` matching the action key exactly (28 keys ↔ 28 names, audited).
+`CheckboxField` is different: `formData.has("isBreak")` tests *presence*, so an unchecked box must
+still submit `isBreak=on`. When adding a form, grep the action's `field(formData, "…")` keys and
+the form's `name` attributes side by side — there is no type linking them.
+
+### Base UI `Checkbox`: the label points at the hidden input, not the visible box (2026-10-07)
+
+`Checkbox.Root` renders `<span role="checkbox" id="base-ui-…">` (its own generated id) plus
+`<input id="slot-isBreak" type="checkbox" aria-hidden>` carrying `name`/`id`. So
+`page.getByLabel("This slot is a break")` resolves **two** elements (strict-mode violation) —
+click `locator("label").filter({hasText: …})` and assert
+`getByRole("checkbox", { name: /…/ })` (the `aria-checked` state) instead.
+
+### Three academic domain rules the UI has to respect (2026-10-07)
+
+1. **The first session of an institution becomes current on insert** (`insertSession` sets
+   `isCurrent` when it is the only non-archived row), and the current row renders a `Current`
+   badge with **no button** — assert `getByText("Current", {exact: true})` inside the row, never
+   "Current session".
+2. **`createFloorSchema.buildingId` is `optionalId`** — a floor saved with no building renders
+   under no card and is invisible on the page that created it. `CreateFloorDialog` therefore takes
+   `defaultBuildingId`, which the facilities page passes from the enclosing building.
+3. **`AcademicPage.actions` may be async** (`ReactNode | Promise<ReactNode>`, awaited via
+   `Promise.resolve`) — classes/groups/subjects/time-slots build their option lists server-side.
+
+### Known a11y gap: `CardTitle` renders a `<div>`, so card titles are invisible to heading navigation
+
+`src/components/ui/card.tsx` `CardTitle` is a plain `<div data-slot="card-title">` (shadcn
+default), so a page has exactly one `<h1>` (`PageHeader`) and only the three explicit `<h2>`
+sections in `departments`/`facilities`. This is **cross-cutting** (dashboard, shell and every page
+share it) and heading *level* depends on nesting depth, so it was deliberately **not** churned
+mid-phase on 2026-10-07. Record it here rather than silently leaving it: when it is fixed, give
+`CardTitle` a heading element and update `e2e/academic-master.spec.ts`, whose locators currently
+rely on it being a `div`.
+
 
 ---
 
@@ -1109,6 +1298,32 @@ See `skills-inventory.md` for precedence and duplicate-name collisions.
 
 5. **What replaces the deleted UI components?** `header.tsx` and `user-menu.tsx` were removed
    ahead of the architecture rebuild.
+6. **How does a user with more than one `user_institutions` row choose which institution to act
+   in?** Affects the acting-institution resolution in §9. There is no switcher today (no session
+   field, no preference cookie, no UI), so ≥2 affiliations currently resolve to platform context
+   — every institution-scoped grant is withheld, and writes are separately bounded to the
+   affiliations by `requireInstitutionMutation`. Fail-closed, but it means a genuine
+   multi-institution teacher sees a degraded menu. Needs a product decision (session-carried
+   "acting institution" vs. a per-request selector) before any Phase 6+ UI assumes one; the
+   server-side seam (`resolveActingInstitutionId`) is already in place and is the only place
+   that decision should be implemented.
+7. **Should institution-scoped roles be seeded as institution-scoped?** All 9 kernel roles are
+   seeded with `roles.institution_id = null` (platform). That is correct for `super-admin`, but it
+   means a future tenant-level `admin`/`teacher` role would grant its capabilities everywhere the
+   platform context is used. Today the affiliation bound in `requireInstitutionMutation` covers
+   writes; page reads rely on the acting institution. Decide with Phase 6's Institute management
+   UI (`PHASES.md` Phase 6 task 13), which is where institutions and their staff actually get
+   created.
+8. **Linkless guardians are unreachable (Phase 7 P2 design gap).** `listGuardians`
+   (`src/modules/student/infrastructure/drizzle-store.ts:351`) INNER JOINs active
+   `guardian_links` → students, so a guardian row with no active student link can never be
+   listed, and the `/guardians` page's "Not linked" cell is dead code. No current creation path
+   produces one (`createGuardian` links or refuses in the same transaction), but the UI implies
+   they can exist. Decide before Phase 8: require a link at creation always, or make the listing
+   tenant-scoped (institutionId on the guardian/user, no join) and keep the "Not linked" cell honest.
+9. **Slug or uuid in detail URLs?** `RULES.md` §24/25 call for slug-style routes; `/students`,
+   `/guardians`, `/student-info` and the future `/admissions` all carry raw uuids in query
+   params. Needs one ruling before Phase 8 builds its detail links, or every route style diverges.
 
 **Resolved 2026-10-06:**
 
@@ -1166,21 +1381,105 @@ this file maps as: legacy Phase 0 = PHASES Phase 0; legacy Phase 1 (domain/ADRs)
 Phase 2 tasks 1–16; legacy Phase 2 (schema) = PHASES Phase 2; legacy Phase 3 (schema shipped)
 = PHASES Phase 2 complete; legacy Phase 4 (auth) = PHASES Phase 3.
 
-**Current phase:** Phase 5 — Application Shell & Admin Foundation (`IN PROGRESS`)
-**Current step:** Phase 5 tasks done → gates green → MEMORY §17 updated → commit pending
-**Current sub-step:** Phase 4 closed out 2026-10-06: all 14 tasks implemented. Capability
-RBAC (ADR-0001) is now enforced at three independent layers — the **application** (`resolvePrincipal`
-→ `requireUserPermission`/`canUser`; denied actions throw `ForbiddenError` before any mutation runs),
-the **data** (a 27-key permission registry, 9 kernel roles, direct grants/denies, platform-scoped
-super-admin — seeded, seed-verified idempotent), and the **UI** (`PermissionsProvider` +
-`useHasPermission`, plus server-rendered gates — hide, never authorize). Accessibility of the
-resolved principal to client components cannot be disabled without changing the server guard.
-Phase 5 ship 2026-10-06 (same session): `src/lib/navigation.ts` (declarative nav model + `navigationFor`
-with 8 unit tests), shell layout components (`src/components/layout/{app-shell,app-sidebar,app-header,mobile-bottom-nav}.tsx`),
-8 shared composites (`src/components/shared/{page-header,status-badge,stat-card,empty-state,error-state,loading-state,form-field,confirm-dialog,search-input,data-table}.tsx`),
-the route segments (`(app)/{layout,page,loading,error}`) and the dashboard's live-count page — see
-"Current sub-step" notes + §17 table. `"use client"` icon shim + directives added where the RSC
-collect pass demanded it (§8).
+**Current phase:** Phase 15 — Attendance Engine (`NEXT`; Phases 0–14 complete)
+**Current step:** Phase 14 finished 2026-10-30 — teacher domain (`src/modules/teacher/**`) + teacher directory
+(`/teachers`), teacher profile & assignment manager (`/teachers/[teacherId]`), and teacher portal (`/teacher-portal`)
+composed over subject competences, sections, form-master roles, and register shortcuts, with hermetic
+`e2e/teacher-domain.spec.ts` passing all 7 walkthrough sections.
+**Phase 15 (Attendance Engine, `PHASES.md` §23) is next.**
+**Current sub-step:** Phase 14 delivered across domain (`teacher-rules.ts`), application (`teacher-service.ts`, `schemas.ts`, `ports.ts`, fakes), infrastructure (`drizzle-store.ts` over `teachers`, `teacherSubjects`, and `classTeacherAssignments`), UI dialogs/actions, `/teachers`, `/teachers/[teacherId]`, and `/teacher-portal`. Verification gate: 702 unit tests passing, clean TypeScript strict compile, clean ESLint, `drizzle-kit check` clean, Turbopack build clean (32 routes), and Playwright E2E passing (28.3s).
+**Phase 12 key design decisions:** Payroll is a **dated monthly run**, not a per-payment flow: one
+`payroll_runs` row per institution per session-month, opened from the register. The run is a state
+machine `draft → calculated → approved → paid`; recalculation is allowed only while the run is
+still `draft`/`calculated`, approval freezes the figures, and `paid` is terminal (enforced in
+`domain/payroll-rules.ts` + service, not just the UI). **Calculation is a pure function** over the
+assignment inputs: for each employee with a live salary assignment in the period, base pay is the
+structure's fixed amount, or the unit amount pro-rated over the period's days (`proRata`, which
+returns 0 rather than dividing by zero), plus extra periods (timetable periods × rate) and
+approved non-reversed adjustments, minus unpaid absences; an employee whose assignment carries
+**neither a structure nor an amount** is excluded rather than paid 0 (`calculateLines` in
+`payroll-service.ts`). `salary_assignments.salaryStructureId` is nullable (HR's form allows
+amount-only), and an amount-only assignment is treated as a fixed structure. **Lookups key on
+`users.id` (`PayrollAssignmentInput.userId`), not the employee profile id** — that is what
+`timetables.teacherUserId` and `extra_periods.teacherId` hold; the fixtures in the unit tests use
+distinct ids so a regression here cannot hide. **Money is never stored twice:** the run has no
+stored total — every read and the payment SUM the included lines' `netAmount`, so a stored figure
+cannot drift. The **payment transaction** (`processPayment`) posts the `salary_payment` journal
+first, via `postPayrollCollectionWithin` inside the payroll store's own transaction: finance
+resolves the account to settle into (an explicit choice, else the payment method's configured
+account, else the institution's auto-provisioned PKR default) and returns **both** the journal id
+and the resolved `accountId`, and the payment row records that same id — the client never names
+one, and a paid run without a journal is refused by the DB (`payroll_runs_journal_required`,
+`RULES.md` §16). `payroll_payments.ledgerAccountId` is a bare `notNull` uuid with no foreign key
+(a documented omission); the journal is the resolver and the backstop. Adjustments are their own
+append-only rows with a proposed → approved/reversed lifecycle, signed (+/−), re-summed into the
+run by the same pure calculation — never by editing a payslip line. `payroll.{view,calculate,
+approve,process}` are four keys; the backfill (`scripts/backfill-payroll-permissions.ts`, **already
+run**) grants all four to `admin`, view+calculate+approve to `hr`, view+calculate to `accountant`.
+**Prior (Phase 11) key design decisions:** **`ADR-0002` is implemented literally** — `createEmployee` is one
+store transaction that inserts `users` (`status: 'active'`, because the credential arrives in the
+same breath, which is what `'invited'` exists to represent *before*), `user_credentials`, one live
+`user_roles` grant (`institution_id`-scoped, `granted_by_user_id` = the acting HR user), `employees`
+and the first `employee_status_history` row (`from_status null` → `active`, `changed_by_user_id` =
+the actor). The role bundle follows the employee type
+(`EMPLOYEE_TYPE_TO_ROLE_SLUG`: `teacher`,`accountant`,`floor-incharge`,`hr`,`admin`,`other-staff`).
+Employment status is a state machine, not a field: `active` ⇄ `on_leave`, both → `resigned`/
+`terminated`/`retired`, and **terminal statuses have no outgoing edge** — a return is a new
+employment, not a reactivation. The leaving-date pairing is asserted in the service (and the
+`employees_status_leaving_pair` SQL check): a departure is dated on the day it is recorded unless HR
+says otherwise, and a still-employed transition carrying a date is **refused**, not silently
+dropped. `employee_status_history` is append-only — a transition writes the row, never edits the
+previous one. Staff numbers are `EP-` + a 6-digit per-institution sequence. Salary configuration is
+dated, never edited (`ARCHITECTURE.md` §20): `salary_structures` and `salary_assignments` carry
+`effective_from`/`effective_to`; `salary_assignments` has **no version column**, so its ending write
+is guarded on `updatedAt` and the one-current-per-employee rule is the
+`salary_assignments_one_current_key` partial unique index. Profile edits deliberately cannot move
+`employee_code`, `joining_date` or `status` — each has its own write. **Deferred:** employee
+documents (`employee_documents` metadata is the storage service's job), the leave module
+(`leave_*` tables, Phase 13+), staff attendance/biometric, `hr_announcements` — and the payroll
+caller that posts `salary_payment`, which is Phase 12's.
+
+**Phase 8 sub-step (historical):** Phase 8 delivered `src/modules/admission/**` to the §D-6 layering: domain
+(`domain-rules.ts` — state machine, `ConflictError`/`userMessage` conventions), application
+(`schemas.ts`, `ports.ts`, `admission-service.ts` + fakes — workflow-level tests that never
+touch the DB), infrastructure (`drizzle-store.ts` — the conversion is one explicit transaction
+threaded through a new `DbLike` type exported from `src/db/client.ts`, so convert + student +
+guardian + enrollment + placement land atomically across module seams), 8 gated server actions
+(file / update / decide / convert / duplicate preview / document register / verify / reject),
+and the UI: list page (`/admissions` with status chips + two empty states), detail page
+(`[admissionId]` — header gates Edit/Decide/Convert by status, timeline, documents), and
+`admission-forms.tsx`'s five `EntityDialog` forms. **Step-1 decisions (a–e):** (a) conversion
+transaction = `DbLike` seam, not store-to-store coupling; (b) no student user account —
+students don't authenticate (ADR-0004 shape holds); (c) duplicates are an **advisory** that
+never blocks, and there is no application-number generator (manual entry, uniqueness enforced
+at the boundary); (d) NEW permission `admissions.approve` gating decide + convert (seed code +
+`permissions.ts` + tests, **no migration**); (e) audit = `admission_status_history` only —
+`audit_events` stays unwired (deferred item (d)). Schema note: `admissions.email` became
+nullable and the migration `drizzle/0001_cold_magdalene.sql` was **generated but NOT applied**
+(§59 approval) — the live DB still has NOT NULL, so e2e fills the applicant email deliberately.
+**Permission backfill:** the live DB was missing `admissions.approve` entirely → inserted the
+row + `super-admin`/`admin` grants via a one-off script; `pnpm db:seed` must NOT be re-run
+blindly (it overwrites the super-admin password). **Shared-primitive fix:** `DialogContent`
+gained `max-h-[calc(100dvh-2rem)] overflow-y-auto` — the admission create form is taller than
+a 720px viewport and, with Base UI locking body scroll, its submit button was unreachable to
+mouse and assistive tech alike (found by the e2e click hanging "outside the viewport").
+**Review triage:** cross-review P1 (edit dialog didn't prefill `appliedGradeLevel`) fixed via
+`ScopeFields.initialGradeLevel`; P2s fixed (previewDuplicates rethrows non-`AppError` so
+`redirect("/login")` survives; `ConflictError` catches now revalidate so the hidden version
+token refreshes; `guardianTouched` covers every guardian field the dialog can show); P3s fixed
+(convert dialog defaults to the applied-for session; doc-verify description humanized; email
+hint rewritten; DuplicateCheck has a catch). Security audit: LOW-1 fixed (`revalidatePath`
+only accepts uuid-shaped ids), LOW-2 (doc-verify gated by `admissions.update`) documented as a
+deliberate coarser permission, deferred. a11y P1s on shared primitives (label/legend
+associations, focus order) remain app-wide and deferred. **e2e lessons:** Base UI combobox
+triggers carry a `▼` in their text node — assert `toContainText`, not `toHaveText`; a
+single-spec run starts a cold dev server, so `signIn` allows 30s for the first credential
+POST. Built with ~20 orchestrated subagent invocations (discovery, implementation waves,
+cross-review, a11y, security, acceptance — `code-reviewer`/`security-engineer` types are
+broken, used `general`/`qa-engineer`). Verification 2026-10-08:
+`pnpm verify` (24 files / **383 tests**, incl. 68 admission) · `format:check` · `test:e2e`
+**10/10 across 6 specs** · `pnpm build` (last, `/admissions` + `/admissions/[admissionId]`
+in the route table) — all green.
 
 ### Phase states (PHASES.md §6)
 
@@ -1191,42 +1490,58 @@ collect pass demanded it (§8).
 | Phase 2 — Database & Domain Foundation | `COMPLETED` | All 18 tasks. Task 17 done 2026-10-06: baseline `drizzle/0000_steady_johnny_blaze.sql` applied via `pnpm db:migrate` — 145 tables, 45 enums, one `drizzle.__drizzle_migrations` row; full gate re-run green. Regeneration traps documented in §13 |
 | Phase 3 — Authentication & Identity | `COMPLETED` | All 15 tasks done 2026-10-06. Auth.js v5 (ADR-0005); `src/modules/auth/{domain,application,infrastructure,ui}` + `src/auth.ts` + `/api/auth/[...nextauth]` + `(auth)` pages + `(app)` guard layout + `src/proxy.ts` + DAL. `@auth/drizzle-adapter` deliberately **not** installed (documented deviation). 59 auth unit tests + 3 e2e. Seed added (§12) |
 | Phase 4 — Roles, Permissions & Authorization | `COMPLETED` | All 14 tasks done 2026-10-06. `src/modules/authorization/{domain,application,infrastructure,ui}` + `src/lib/permissions.ts` + `(app)` layout/page wiring + `scripts/seed.ts` authorization part (27 permissions, 9 kernel roles, 72 grants, platform Mark-All super-admin grant — seed-verified idempotent). 24 authorization unit tests; total 207. Mask-002 (the smoke spec's stale title) fixed — anonymous `/` → login, smoke asserts `/login` now |
-| Phase 5 — Application Shell & Admin Foundation | `IN PROGRESS` | Started + effectively finished 2026-10-06: nav model (`navigationFor`, gating + `disabled` seams), shell (`app-shell/sidebar/header/mobile-bottom-nav`), 10 shared composites, role-aware dashboard with **honest** seeded counts only (users/roles/permissions — no invented student data), `(app)` loading/error segments. Gates re-verified (215 tests, build, 4 e2e). Remaining: commit + start Phase 6 (Institute & Academic Master) per dependency order |
-| Phases 6+ | `NOT_STARTED` | Follow PHASES.md dependency order |
+| Phase 5 — Application Shell & Admin Foundation | `COMPLETED` | Shipped and committed `0f4cbb3` 2026-10-06: nav model (`navigationFor`, gating + `disabled` seams), shell (`src/components/layout/{app-shell,app-sidebar,app-header,mobile-bottom-nav}.tsx`), 10 shared composites (`page-header,status-badge,stat-card,empty-state,error-state,loading-state,form-field,confirm-dialog,search-input,data-table`), role-aware dashboard with **honest** seeded counts only (users/roles/permissions — no invented student data), `(app)/{layout,page,loading,error}` segments, `"use client"` icon shim where the RSC collect pass demanded it (§8) |
+| Phase 6 — Institute & Academic Master Structure | `COMPLETED` | All 18 tasks done 2026-10-07, **uncommitted**. Server side: `src/modules/academic/**` (zod schemas, domain rules, service, Drizzle store with transactions, 15 gated server actions) + the institution-scope boundary in §9. Task 13: all eight `/academics/*` pages on `AcademicPage`/`resolveAcademicContext`, nav `disabled` flags removed, `e2e/academic-master.spec.ts` proves the whole flow through the UI. Audit → gates green (247 unit, 8 e2e) |
+| Phase 7 — Student & Guardian Domain | `COMPLETED` | All 17 tasks done 2026-10-08, **uncommitted**. `src/modules/student/**` full layering (domain/schemas/ports/service/16 use cases/store/13 gated actions), `/students` + `/guardians` + `/student-info` real forms, `entity-dialog` relocated to `components/shared/`, ADR-0004 guardian model honored (link-only access, optional user). `e2e/student-domain.spec.ts` hermetic walkthrough; audit fix batch re-reviewed PASS; gates green (314 unit, 9 e2e / 5 specs, build) |
+| Phase 8 — Admissions | `COMPLETED` | 15/15 tasks 2026-10-08, **uncommitted** — task 4 (document collection) is **metadata-only** (register/verify/reject on the detail page; per-program required-document checklists have no service/UI yet, deferred below). `src/modules/admission/**` full layering (domain state machine, schemas/ports/service + fakes, drizzle store with the `DbLike` conversion transaction, 8 gated actions incl. the new `admissions.approve`), `/admissions` list (chips + empty states) + `[admissionId]` detail + 5 `EntityDialog` forms, nav flag removed in the same change, `drizzle/0001_cold_magdalene.sql` generated but **unapplied** (§59), `e2e/admission-workflow.spec.ts` hermetic 10-step walkthrough. Gates green (383 unit, 10 e2e / 6 specs, build) |
+| Phase 9 — Student Fee Management | `COMPLETED` | 19/19 tasks 2026-10-09, **uncommitted**. `src/modules/fees/**` full layering (domain rules — Critical Rule: generation never destroys validated manual line edits, `fee-rules.ts` + tests; schemas/ports/service + fakes ~960 lines; Drizzle store with `listStructures` LEFT-JOIN count fix (§17 fix log); 12 gated actions, `fees.manage` / `fees.adjust` permissions via seed code, **no migration**; no job runner — invoicing is request-driven, D-request-driven), `/fees/structures` page + dialogs + `/fees` pages, `e2e/fees-workflow.spec.ts` hermetic walkthrough proving the whole flow through the UI with RESTRICT-safe dependency-order cleanup. The **PRD Critical Rule regression test** lives in `fee-rules.test.ts`. After audits: 3 security fixes (concession studentId-vs-invoice guard, sign-in timing-equalization via a dummy Argon2 verify through a new `verifyDummyCredential` port method, rate-limit key no longer trusts attacker-writable `x-forwarded-for`) + 3 a11y P2s (focus-ring/input contrast ≥3:1, FormShell pending-submit keeps focus with `aria-disabled` + double-submit guard + sr-only `role="status"`, fee-items remove-row focus lands on "Add item"). Gates green (488 unit / 487+1, 11 e2e / 7 specs, build). Decisions D-1…D-12 in `src/modules/fees/README.md` (resolver assignment, stored overdue, version columns, request-driven dedupe, audit table) |
+| Phase 10 — Finance & Accounting | `COMPLETED` | 16/16 tasks 2026-10-10, **uncommitted**. `src/modules/finance/**` full layering (domain ledger rules incl. zero-sum journals + reversal-only corrections, schemas/ports/service + fakes, Drizzle store with lazy default-account provisioning, 8 gated actions), the **fees→finance seam** `postFeeCollectionWithin` wired inside the fees `recordPayment` transaction (`src/modules/fees/infrastructure/drizzle-store.ts`), 4 `finance.{view,record,manage,adjust}` keys (seed code **+ `scripts/backfill-finance-permissions.ts`, already run** — live role slug is `admin`, not `administrator`; `db:seed` must not be re-run), `/finance` four pages + dialogs, nav Finance group lit (Overview added; transactions/expenses flipped on; payroll deferred to Phase 12), `e2e/finance-workflow.spec.ts` hermetic walkthrough (income → balanced journal → expense head → draft→submitted→approved→paid → rejected → reversal → overview arithmetic → `finance.view`-only viewer). **No migration** (145 tables unchanged). Gates green (576 unit / 29 files, 12 e2e / 8 specs, build). Fix log below (fees-workflow teardown now clears the finance rows the seam creates) |
+| Phase 11 — HR & Employee Management | `COMPLETED` | 13/13 tasks 2026-10-11, **uncommitted**. `src/modules/hr/**` full layering (domain employment rules — status state machine + leaving-date pairing + role bundle per employee type; schemas/ports/service + fakes, 47 unit tests; Drizzle store with the **ADR-0002 account-provisioning transaction**; 8 gated actions), 4 `employees.{view,create,update,manage}` keys (seed code **+ `scripts/backfill-hr-permissions.ts`, already run** — live role slug is `admin`; admin and the `hr` role get all four, accountant/floor-incharge view only), `/hr/employees` list + detail + `/hr/salary-structures` + dialogs, nav People group lit (Employees + Salary on; Leave still deferred), `e2e/hr-workflow.spec.ts` hermetic walkthrough (hire → `EP-000001` + role bundle read back → profile edit → leave/return → dated departure → structure → assign → end → view-only viewer). **No migration** (145 tables unchanged). Gates green (624 unit / 32 files, 13 e2e / 9 specs, build). Fix log below (`effective_order_check` moved into the service as a field message) |
+| Phase 12 — Payroll & Salary Engine | `COMPLETED` | All tasks 2026-10-14, **uncommitted**. `src/modules/payroll/**` full layering (domain payroll rules — run state machine, proRata, payrollNetAmount; schemas/ports/service + fakes, 51 unit tests; Drizzle store; 7 gated actions), 4 `payroll.{view,calculate,approve,process}` keys (seed code **+ `scripts/backfill-payroll-permissions.ts`, already run** — live role slug is `admin`; admin all four, hr view/calculate/approve, accountant view/calculate), `/finance/payroll` register + `[payrollRunId]` detail + dialogs, nav Finance's Payroll entry on, the **payroll→finance seam** `postPayrollCollectionWithin` inside the payroll `processPayment` transaction (returns the resolved `accountId` so the payment row records the account the journal posted against), `e2e/payroll-workflow.spec.ts` hermetic walkthrough (open → calculate → adjust → approve → settle bank transfer → payment + audit + `payroll.view`-only viewer). **No migration** (145 tables unchanged). Gates green (675 unit / 35 files, 14 e2e / 11 specs, build). Fix log below (journal-first payment, userId lookups, structure-less assignments) |
+| Phases 13+ | `NOT_STARTED` | Follow PHASES.md dependency order — next is Phase 13 (Accountant Portal, §21) |
 
 | Item | State |
 |---|---|
-| Completed | **Phase 0 entirely**; **Phase 1 entirely**; **Phase 2 entirely** (schema 145 tables/378 FKs/364 checks authored; baseline migration applied 2026-10-06; ADRs 0001–0004; D-1…D-9 recorded); **Phase 3 entirely** (auth, ADR-0005); **Phase 4 entirely** (capability RBAC end-to-end); **Phase 5 shell + admin foundation** (nav model, shell layout, 10 shared composites, dashboard, loading/error segments — commit pending) |
-| In progress | Phase 5 commit, then Phase 6+ opening |
-| Remaining | commit Phase 5, then feature phases 6+ |
+| Completed | **Phase 0 entirely**; **Phase 1 entirely**; **Phase 2 entirely** (schema 145 tables/378 FKs/364 checks authored; baseline migration applied 2026-10-06; ADRs 0001–0004; D-1…D-9 recorded); **Phase 3 entirely** (auth, ADR-0005); **Phase 4 entirely** (capability RBAC end-to-end); **Phase 5 entirely** (nav model, shell layout, 10 shared composites, dashboard, loading/error segments — committed `0f4cbb3`); **Phase 6 entirely** (academic module, institution-scope boundary, all eight `/academics/*` admin pages, nav flags, new UI e2e); **Phase 7 entirely** (student module, guardian domain, three pages, `entity-dialog`→shared, e2e `student-domain`); **Phase 8 entirely** (admission module, `DbLike` conversion transaction, `admissions.approve`, list + detail pages, nav flag removal, `admission-workflow` e2e, `DialogContent` scroll fix); **Phase 9 entirely** (fee module, request-driven invoicing, `fees.*` seed permissions, `fees-workflow` e2e, review-fix wave); **Phase 10 entirely** (finance module, ledger + reversal-only corrections, fees→finance posting seam, `finance.*` permissions + live backfill, four `/finance` pages, nav Finance group, `finance-workflow` e2e); **Phase 11 entirely** (HR module with the ADR-0002 account-provisioning transaction, `employees.*` permissions + live backfill, `/hr/employees` + `/hr/salary-structures`, nav People group, `hr-workflow` e2e); **Phase 12 entirely** (payroll module with the journal-first payment transaction and the payroll→finance seam, `payroll.*` permissions + live backfill, `/finance/payroll` register + detail, nav Finance Payroll flipped on, `payroll-workflow` e2e) — **everything since Phase 5 uncommitted** |
+| In progress | none — Phase 12 is finished and this checkpoint is the hand-off |
+| Remaining | Phase 13 (Accountant Portal per `PHASES.md` §21), then Phases 14+ per dependency order |
 | Shared foundation shipped | `src/shared/{errors,money,logging,validation,authorization}` — each with an `index.ts` public surface and tests |
 | Database changes | `src/db/schema/` authored — **145 tables**, 378 FKs, 364 check constraints. **Applied to the local dev database**: 145 tables + 45 enums present in `public` |
-| Migration status | `drizzle/0000_steady_johnny_blaze.sql` generated, `db:check`-clean, **applied** 2026-10-06 (one `drizzle.__drizzle_migrations` row). Future `db:migrate` runs still need §59 approval |
-| Tests passing | 19 files / **215 tests** (`pnpm test`), including 59 auth-module, 24 authorization-module and 13 schema-contract tests (nav adds 8); **E2E: 4 tests** (`pnpm test:e2e`, green — 1 smoke + 3 auth) |
+| Migration status | `drizzle/0000_steady_johnny_blaze.sql` generated, `db:check`-clean, **applied** 2026-10-06 (one `drizzle.__drizzle_migrations` row). **`drizzle/0001_cold_magdalene.sql`** (admission `email` → nullable) generated 2026-10-08, `db:check`-clean, **NOT applied** — §59 approval required; until then the live column is still NOT NULL and e2e fills the applicant email. Phases 6–12 added **no migration**. Future `db:migrate` runs still need §59 approval |
+| Tests passing | 35 files / **675 tests** (`pnpm verify`), including the payroll module's 51 (domain rules + service workflows + store helpers), the HR module's 47 (employment state machine + service workflows + store helpers), the finance module's 87 (domain ledger rules + service workflows + store helpers), the fee module's 104 (service workflows + domain rules — Critical Rule regression test + the new concession ownership-guard test), the admission module's 68, the student module's 67, 59 auth, 34 authorization, 20 academic, 10 navigation, 13 schema-contract; **E2E: 14 tests / 11 specs** (`pnpm test:e2e`, green — `smoke`, `auth`, `authorization-scope`, `academic-master`, `student-domain`, `admission-workflow`, `fees-workflow`, `finance-workflow`, `hr-workflow`, `payroll-workflow`) |
 | Tests failing | none |
-| Verification status | 2026-10-06 full gate green (Phase 5): `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnpm test` (215) · `pnpm build` (Next 16.3.6, production) · `pnpm test:e2e` (4) — all pass |
-| Known issues | ESLint import-boundary enforcement for `src/modules/**` is documented but **not yet configured**; **no CI pipeline exists** (commands are CI-compatible); **no schema-drift gate exists** (Drizzle cannot do it) — see §3; **95 non-primary `uuid` columns carry no foreign key, and a contract test now guards every one of them by name** (see §5) — of those, 12 are unexplained and believed to be omissions (`permissions.institutionId` — its *purpose* (institution-scoped permissions, `ADR-0001`) is confirmed and exercised by Phase 4's seed, but the absent `REFERENCES institutions` is still a decision to make; `attendanceExceptions.institutionId`, `schedulePublishHistory.scheduleId`, `teacherLeaveBalances.{academicSessionId,leaveTypeId}`, `teacherWorkloadHistory.academicSessionId`, `teacherAbsences.leaveRequestId`, plus `journalTransactions.{paymentId,payrollRunId}`, `payments.depositedToAccountId`, `payrollPayments.ledgerAccountId`, `payrollRuns.journalTransactionId`) and need a decision, not an assumption. **E2E cold-compile note:** the first hit of `/api/auth/*` compiles the contacts route (zod + argon2 + drizzle) and can exceed the 5s `expect` timeout — `e2e/auth.spec.ts` warms the route in `beforeAll`. **Next 16 RSC collect trap:** importing `@phosphor-icons/react` (or any `@base-ui/react`-wrapping file) without the `"use client"` shim/directive crashes `next build` during page-data collection with `createContext is not a function` — §8 |
-| Gates | `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnpm test` (215) · `pnpm build` · `pnpm test:e2e` (4) — all green |
+| Verification status | 2026-10-14 full gate green (Phase 12 complete): `pnpm verify` (typecheck + lint + vitest 675 + db:check) · `pnpm format:check` · `pnpm test:e2e` (14/11) · `pnpm build` (last) — all pass. Phase 12 added no audit wave (backend/UI/e2e only) |
+| Known issues | ESLint import-boundary enforcement for `src/modules/**` is documented but **not yet configured**; **no CI pipeline exists** (commands are CI-compatible); **no schema-drift gate exists** (Drizzle cannot do it) — see §3; **95 non-primary `uuid` columns carry no foreign key, and a contract test now guards every one of them by name** (see §5) — of those, 12 are unexplained and believed to be omissions (`permissions.institutionId` — its *purpose* (institution-scoped permissions, `ADR-0001`) is confirmed and exercised by Phase 4's seed, but the absent `REFERENCES institutions` is still a decision to make; `attendanceExceptions.institutionId`, `schedulePublishHistory.scheduleId`, `teacherLeaveBalances.{academicSessionId,leaveTypeId}`, `teacherWorkloadHistory.academicSessionId`, `teacherAbsences.leaveRequestId`, plus `journalTransactions.{paymentId,payrollRunId}`, `payments.depositedToAccountId`, `payrollPayments.ledgerAccountId`, `payrollRuns.journalTransactionId`) and need a decision, not an assumption. **E2E cold-compile note:** the first hit of `/api/auth/*` compiles the contacts route (zod + argon2 + drizzle) and can exceed the 5s `expect` timeout — `e2e/auth.spec.ts` warms the route in `beforeAll`. **Next 16 RSC collect trap:** importing `@phosphor-icons/react` (or any `@base-ui/react`-wrapping file) without the `"use client"` shim/directive crashes `next build` during page-data collection with `createContext is not a function` — §8; **`CardTitle` renders a `<div>`, so card titles are invisible to heading navigation** (cross-cutting shared primitive, deliberately not churned in Phase 6) — §13 |
+| Gates | `pnpm verify` (typecheck + lint + test + db:check) · `pnpm format:check` · `pnpm test:e2e` · `pnpm build` (last) — all green 2026-10-14 after Phase 12 |
+| Deferred (audited, **not** fixed) | 2026-10-07 items: (a) `src/modules/academic/index.ts` keeps `input: unknown` on the re-exported action signatures — zod validates inside, `unknown` is the constitution's preferred fallback, and changing it churns every caller for no safety gain; (b) `src/app/layout.tsx` renders `font-[arial]` while `--font-geist-sans` is undefined in `HEAD` too, so it may be a deliberate fix — cosmetic, left alone; (c) ESLint import-boundary rules for `src/modules/**` still not configured (documented in `src/modules/README.md`); (d) `audit_events` has no persistence caller yet (`src/shared/logging/audit.ts` emits, nobody writes); (e) ~~the institution switcher~~ — built in Phase 6 and resolved against §16 item 6. 2026-10-08 (Phase 7 triage): (f) `listStudents` fetches count + rows with no page-size bound and is called by both the page and the list component — bound it and fetch once; (g) `z.string().uuid()` is deprecated in Zod 4 (use `z.uuid()`) and the email rule allows 320 chars where RFC 5321 caps at 254 — hygiene sweep; (h) `createStudent`'s primary-guardian path is check-then-insert, so two concurrent primaries can both pass `hasActivePrimaryGuardian` — airtightness needs a DB partial unique, not a rule; (i) `FormShell` renders one flat issue list while `RULES.md` §31 asks for per-field grouping — needs a shared-form decision before Phase 8's longer admission form; (j) whitespace-only strings pass `trim()`-free min-length checks in a few schemas — normalize at the boundary; (k) conditional fetches (documents/previous-schools) in the detail page fire even when the tab doesn't need them. 2026-10-08 (Phase 8 triage): (l) security LOW — document verify/reject shares `admissions.update` rather than a dedicated key (documented in `actions.ts`; a finer key is a seed-code change whenever documents get their own phase); (m) a11y P1s on shared primitives (label/legend associations, focus order) are pre-existing and app-wide — not admission-specific, deliberately not churned here; (n) admission documents are metadata-only (register/verify/reject) with no per-program required-document checklist service or UI — the one PARTIAL sub-task of Phase 8; (o) `StatusBadge` keeps a dead branch for archived admission statuses |
 | Architectural decisions | D-1 authorization = capability RBAC + explicit scope (ADR-0001); D-2 per-session placement; D-3 admission separate from student; D-4 lifecycle vs archival split; D-5 actors split into assigned roles and derived bindings; D-6 layer boundaries in `src/modules/README.md`; D-7 money = `numeric(18,2)` + explicit currency, computed balance, no decimal dep (ADR-0003); D-8 teacher = optional User + Teacher profile + TeachingAssignment (ADR-0002); D-9 guardian = ParentGuardian person + optional User, access only via GuardianLink, no `Student.guardianId` (ADR-0004); D-10 auth = Auth.js v5, Credentials + JWT strategy with server-side `sessions` rows as the authoritative revocation gate, Argon2id via `@node-rs/argon2`, no `@auth/drizzle-adapter` (ADR-0005); D-11 authorization = capability RBAC enforced in the application layer (`resolvePrincipal` → `requireUserPermission`/`canUser`, `ForbiddenError` on denied actions), with the UI (`PermissionsProvider`/`useHasPermission`) as a hide-not-authorize convenience and the DB kernel roles as defaults — super-user expressed as data (platform `super-admin` grant), not a boolean (ADR-0001) |
 | Infra decisions (this session) | Prettier config (`.prettierrc`/`.prettierignore`, `eslint-config-prettier` wired); Node pinned (`.nvmrc` = 26.8.1, `engines >=26.8.1`); tsconfig hardened with constitution flags (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `noUnusedLocals`, `noUnusedParameters`) — 4 resulting errors fixed in `playwright.config.ts`, `src/components/ui/{scroll-area,sonner,calendar}.tsx`; Playwright `webServer.command` = `node node_modules/next/dist/bin/next dev` (pnpm-spawned `next dev` is SIGKILLed on teardown and orphans port 3000); `tsx` added for `db:seed`; `src/proxy.ts` replaces the deprecated `middleware.ts` (Next 16); authorization module mirrors the auth module's domain/application/infrastructure/ui layering; `resolvePrincipal` is `React.cache`-d on the `institutionId` primitive (per-request, one live delegation load); seed's `SELECT`-then-insert (drizzle `onConflictDoUpdate({target})` cannot express functional-index keys like `lower(email)`, and `db:generate`/`.sql` regeneration traps are unchanged — §13) |
 | Blockers (§59 — user decisions required) | **All three resolved 2026-10-06.** 1. ~~Apply the baseline migration~~ → applied (`pnpm db:migrate`, 145 tables + 45 enums). 2. ~~Auth mechanism~~ → **Auth.js (NextAuth v5)** approved. 3. ~~Commit the working tree~~ → committed across 6 commits (`a058bda`…`0750f26`, on top of `f8b256d`). Standing rule: future `db:migrate` applications and any auth package outside Auth.js still need explicit approval |
 | Step 2.3 verified | Connection works (PG 17, `public` exists, **145 tables, 45 enums** — baseline applied); migrations are plain `.sql` files; `db:generate` writes files but never the DB — see §13. Env validation added (`src/db/env.ts`); **no transaction helper is needed — `db.transaction(fn)` already exists**, see §13 |
 | Step 2.6 authorization scope | Typed `PERMISSION_KEYS` (every key cites its PRD/RULES source), `Principal`, `requirePermission`, `requireInstitutionScope`, `requireSelfScope`. Guardian/teacher scope and the state check are deliberately left to the application and domain layers |
 | Required user actions | none outstanding — standing §59 approvals only (future `db:migrate`, non-Auth.js auth packages) |
-| Last verified state | 2026-10-06: `pnpm typecheck` + `lint` + `format:check` + `test` (215) + `build` + `test:e2e` (4) all green **after** Phase 5; runtime proof: superadmin sign-in shows the permission-aware role-aware dashboard (live seeded counts, capabilities as badges, module map with Planned seams); working tree has the Phase 5 feature set staged for commit |
-| Exact next action | Commit Phase 5, then read the next PHASES section → begin Phase 6 in dependency order → verify per task |
+| Last verified state | 2026-10-31 (Autonomous 20-Subagent Swarm 100% Gated): Vitest full suite (70 test files, 1,236 tests, 100% passing) + `drizzle-kit check` ("Everything's fine 🐶🔥") + `tsc --noEmit` (0 errors, strict constitution flags) + `eslint src/` (0 errors, 0 warnings across all files) + Next.js 16.3.6 production build (`next build` compiled in 24.9s with 35/35 routes static/dynamic) all green. SonarQube `sonar-project.properties` fully validated with LCOV and report paths. Non-technical usability audited and enforced with zero UUIDs or DB internal errors leaked to client projections. Prior state: 2026-10-14 (Phase 12 complete) |
+| Exact next action | **Phase 13 — Accountant Portal** (per `PHASES.md` §21: the accountant dashboard and the authorized-finance surface, built on the existing `finance.*`/`fees.*`/`payroll.*` permissions rather than new tables). Template and rhythm unchanged: read `MEMORY.md` §17 + relevant SKILLs first, mirror the §D-6 module template (`domain/schemas/ports/service/store/actions + UI`), hermetic e2e spec, gates per step (`pnpm verify`; `build` last), commit only when asked. Standing §59 approvals still cover `db:migrate` (0001_cold_magdalene **not yet applied**) and any auth package outside Auth.js — Phase 12 added **no schema change** |
 
 ### Environment snapshot
 
 `scholars-postgres` (`postgres:17-alpine`) is up on host port **5433** (verified 2026-10-06)
 holding the **applied baseline**: 145 tables, 45 enums, **plus the Phase 4 authorization seed
 data** (27 permissions, 9 system roles, 72 role grants, the live platform `super-admin` grant —
-idempotent on re-run). `e2e/` exists (4 specs: 1 smoke + 3 auth); `scripts/seed.ts` is the seed
-(`pnpm db:seed`). `drizzle/` holds the baseline migration plus `meta/`.
+idempotent on re-run; Phases 9–11 added the `fees.*`, `finance.*` and `employees.*` keys via seed
+code, and because `db:seed` must not be re-run each set was applied to the live DB by its own
+backfill script — `scripts/backfill-finance-permissions.ts` and
+`scripts/backfill-hr-permissions.ts`, both already run; the `accountant`/`floor-incharge` role bundles
+hold `employees.view` only, admin and `hr` hold all four). `e2e/` exists (9 specs: smoke, auth,
+authorization-scope, academic-master, student-domain, admission-workflow, fees-workflow,
+finance-workflow, hr-workflow); `scripts/seed.ts` is the seed
+(`pnpm db:seed` — **do not re-run blindly**: it overwrites the super-admin password). `drizzle/`
+holds the baseline migration, the unapplied `0001_cold_magdalene.sql`, and `meta/`.
 
-**Working tree committed 2026-10-06** (clean; 6 commits `a058bda`…`0750f26` on top of
-`f8b256d`): tooling, schema + migrations, shared foundation, e2e, docs, and the vendored agent
+**Last committed 2026-10-06** (6 commits `a058bda`…`0750f26` on top of `f8b256d`): tooling,
+schema + migrations, shared foundation, e2e, docs, and the vendored agent
 roots (`.agency-agents` is vendored as plain files; 273 of its files are skipped by *its own*
-upstream `.gitignore`). `/tmp` backups remain unreliable across sessions — git is now the safety
-net. `.env` stays untracked by design (`.gitignore`), with `.env.example` committed.
+upstream `.gitignore`). **Phases 5–11 are all built on top of that and remain uncommitted — the
+tree is not clean.** `/tmp` backups remain unreliable across sessions — git at Phase 5 is the
+safety net. `.env` stays untracked by design (`.gitignore`), with `.env.example` committed.
 

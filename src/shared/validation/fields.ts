@@ -111,3 +111,85 @@ export const identifier = (label: string) =>
     .min(1, `${label} is required.`)
     .max(64, `${label} must be at most 64 characters.`)
     .regex(/^[A-Za-z0-9._:-]+$/, `${label} contains unsupported characters.`);
+
+/* -------------------------------------------------------------------------- */
+/* Optional form fields                                                       */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * The next five helpers normalise to `null` — never `undefined` — so a service can pass a value
+ * straight to the store without `?? null` at every call site. They started life in
+ * `src/modules/academic/application/field-helpers.ts`; they moved here when the student module
+ * (Phase 7) became a second consumer, and the header of that file already described them as
+ * generic shape rules rather than academic ones.
+ */
+
+/** A positive integer, or an empty string meaning "not set". */
+export function optionalPositiveIntOrNull(label: string, max = 1_000_000) {
+  return z
+    .union([z.literal(""), z.string().trim()])
+    .transform((value) => (value === "" ? null : Number(value)))
+    .pipe(
+      z.union([z.null(), z.number().int().min(1, `${label} must be a whole number.`).max(max)]),
+    );
+}
+
+/** An optional UUID reference — a `string | null` either way, never `undefined`. */
+export const optionalId = z
+  .union([z.string().uuid("Select a valid option."), z.literal(""), z.undefined(), z.null()])
+  .optional()
+  .transform((value) => (value === null || value === undefined || value === "" ? null : value));
+
+/** A generic optional text field, normalised to `null`. */
+const optionalTextHelper = (max: number, message: string) =>
+  z
+    .union([z.string().trim().max(max, message), z.literal(""), z.undefined(), z.null()])
+    .optional()
+    .transform((value) => (value === null || value === undefined || value === "" ? null : value));
+
+/** Optional free text up to `max` characters, or `null`. */
+export const optionalText = (max: number) =>
+  optionalTextHelper(max, `Must be at most ${max} characters.`);
+
+/** An optional email address, normalised to `null`. */
+export const optionalEmail = optionalTextHelper(320, "Email must be at most 320 characters.").pipe(
+  z
+    .union([z.literal(null), z.string().trim().toLowerCase().pipe(z.email("Enter a valid email."))])
+    .transform((value) => value ?? null),
+);
+
+/** An optional `YYYY-MM-DD` calendar date, or `null`. */
+export const optionalCalendarDate = z
+  .union([
+    z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format."),
+    z.literal(""),
+    z.undefined(),
+    z.null(),
+  ])
+  .optional()
+  .transform((value) => (value === null || value === undefined || value === "" ? null : value));
+
+/**
+ * An optional phone number, normalised to `null`.
+ *
+ * The same shape rule as {@link phoneNumber}, expressed for the fields a form may leave blank —
+ * a student's phone or a guardian's alternate number. `null` (set later) is different from `""`
+ * (cleared), which is why this normalises rather than accepting both.
+ */
+export const optionalPhone = z
+  .union([
+    z
+      .string()
+      .trim()
+      .min(7, "Enter a valid phone number.")
+      .max(20, "Phone number must be at most 20 characters.")
+      .regex(/^\+?[\d\s()-]+$/, "Phone number may only contain digits, spaces and + - ( )."),
+    z.literal(""),
+    z.undefined(),
+    z.null(),
+  ])
+  .optional()
+  .transform((value) => (value === null || value === undefined || value === "" ? null : value));

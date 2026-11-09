@@ -12,7 +12,13 @@
  *
  * Both read only `session.user.id` (plus display fields). The `sid` revocation handle exists
  * solely inside the `jwt` callback (`src/auth.ts`) and is never exposed to page code.
+ *
+ * `server-only` is load-bearing, not decoration: this module is the seam between a session and
+ * everything that acts on its behalf, and a client component importing it would both fail the
+ * build and, were it ever allowed, leak the session shape into the browser bundle.
  */
+import "server-only";
+
 import { cache } from "react";
 import { redirect } from "next/navigation";
 

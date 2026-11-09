@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ERROR_CODES, toClientError } from "@/shared/errors";
+import { ERROR_CODES, ForbiddenError, toClientError } from "@/shared/errors";
 import {
   hasPermission,
   requirePermission,
@@ -8,7 +8,11 @@ import {
   type Principal,
 } from "@/shared/authorization";
 
-import { resolvePrincipal } from "./authorization-service";
+import {
+  authorizeInstitutionCommand,
+  resolveActingInstitutionId,
+  resolvePrincipal,
+} from "./authorization-service";
 import { createAuthorizationFake } from "./testing/fakes";
 import type { GrantScope, RoleGrant } from "../domain/effective-permissions";
 
@@ -114,6 +118,151 @@ describe("denied actions through a principal (task 14)", () => {
       expect(appError.details).toEqual({ permission: "fees.refund", userId: "user-1" });
       expect(appError.userMessage).toBe(
         "You do not have permission to perform this action. If you believe this is a mistake, contact an administrator.",
+      );
+    }
+  });
+});
+
+describe("resolveActingInstitutionId (Phase 6 task 1 — institute context)", () => {
+  const withAffiliations = (ids: readonly string[]) =>
+    createAuthorizationFake(new Map(), {
+      institutionsByUser: new Map([["user-1", ids]]),
+    });
+
+  it("is null for a user with no affiliations — a platform-level user, not a failure", async () => {
+    expect(
+      await resolveActingInstitutionId(createAuthorizationFake(), { userId: "user-1" }),
+    ).toBeNull();
+  });
+
+  it("is that institution when exactly one affiliation disambiguates", async () => {
+    expect(
+      await resolveActingInstitutionId(withAffiliations(["inst-a"]), { userId: "user-1" }),
+    ).toBe("inst-a");
+  });
+
+  it("falls back to platform rather than guessing between several affiliations", async () => {
+    // Picking one arbitrarily would show a user *some other tenant's* numbers while they believed
+    // they were looking at their own; withholding every institution-scoped grant is the honest
+    // failure until an institution switcher exists.
+    expect(
+      await resolveActingInstitutionId(withAffiliations(["inst-a", "inst-b"]), {
+        userId: "user-1",
+      }),
+    ).toBeNull();
+  });
+
+  it("resolves an unknown user to platform context rather than throwing", async () => {
+    expect(
+      await resolveActingInstitutionId(createAuthorizationFake(), { userId: "nobody" }),
+    ).toBeNull();
+  });
+});
+
+describe("authorizeInstitutionCommand — the institution-targeted boundary", () => {
+  const affiliated = (ids: readonly string[]) =>
+    createAuthorizationFake(new Map(), {
+      institutionsByUser: new Map([["user-1", ids]]),
+    });
+
+  it("authorises an affiliated user who holds the capability at that institution", async () => {
+    const instA: GrantScope = { kind: "institution", institutionId: "inst-a" };
+    const fake = createAuthorizationFake(
+      new Map([["user-1", { roleGrants: [role("students.create", instA)], directGrants: [] }]]),
+      { institutionsByUser: new Map([["user-1", ["inst-a"]]]) },
+    );
+
+    const principal = await authorizeInstitutionCommand(fake, {
+      userId: "user-1",
+      institutionId: "inst-a",
+      permission: "students.create",
+    });
+
+    expect(principal.institutionId).toBe("inst-a");
+    expect(principal.permissions.has("students.create")).toBe(true);
+  });
+
+  it("refuses an institution the user does not belong to, even with a platform grant", async () => {
+    // SECURITY.md §87's `institutionId = "another-institution"`: the capability check runs *at*
+    // the target, so a platform grant of the key would otherwise authorise a write into any
+    // tenant. The affiliation is what stops it, and it stops it regardless of grants.
+    const fake = createAuthorizationFake(
+      new Map([["user-1", { roleGrants: [role("students.create")], directGrants: [] }]]),
+      { institutionsByUser: new Map([["user-1", ["inst-a"]]]) },
+    );
+
+    await expect(
+      authorizeInstitutionCommand(fake, {
+        userId: "user-1",
+        institutionId: "inst-b",
+        permission: "students.create",
+      }),
+    ).rejects.toMatchObject({ message: "Outside your institution" });
+  });
+
+  it("lets a platform-level user (no affiliations) act in any institution", async () => {
+    const fake = createAuthorizationFake(
+      new Map([["user-1", { roleGrants: [role("academic.manage")], directGrants: [] }]]),
+    );
+
+    const principal = await authorizeInstitutionCommand(fake, {
+      userId: "user-1",
+      institutionId: "inst-b",
+      permission: "academic.manage",
+    });
+    expect(principal.institutionId).toBe("inst-b");
+  });
+
+  it("resolves the capability at the target, so an institution grant held elsewhere does not leak", async () => {
+    const instA: GrantScope = { kind: "institution", institutionId: "inst-a" };
+    const fake = createAuthorizationFake(
+      new Map([["user-1", { roleGrants: [role("students.create", instA)], directGrants: [] }]]),
+      { institutionsByUser: new Map([["user-1", ["inst-a", "inst-b"]]]) },
+    );
+
+    const inside = await authorizeInstitutionCommand(fake, {
+      userId: "user-1",
+      institutionId: "inst-a",
+      permission: "students.create",
+    });
+    expect(inside.permissions.has("students.create")).toBe(true);
+
+    // Affiliated with inst-b too, so the affiliation bound passes — but the grant is scoped to
+    // inst-a and therefore invisible while acting in inst-b. Scope is applied before precedence,
+    // exactly as ADR-0001 requires.
+    await expect(
+      authorizeInstitutionCommand(fake, {
+        userId: "user-1",
+        institutionId: "inst-b",
+        permission: "students.create",
+      }),
+    ).rejects.toThrow("Missing permission");
+  });
+
+  it("refuses a capability the user simply does not hold", async () => {
+    const fake = affiliated(["inst-a"]);
+    await expect(
+      authorizeInstitutionCommand(fake, {
+        userId: "user-1",
+        institutionId: "inst-a",
+        permission: "fees.refund",
+      }),
+    ).rejects.toThrow("Missing permission");
+  });
+
+  it("uses the same refusal text as requireInstitutionScope, so the client cannot tell them apart", async () => {
+    const fake = affiliated(["inst-a"]);
+    try {
+      await authorizeInstitutionCommand(fake, {
+        userId: "user-1",
+        institutionId: "inst-b",
+        permission: "students.create",
+      });
+      expect.unreachable("expected a refusal");
+    } catch (error) {
+      expect(toClientError(error).code).toBe(ERROR_CODES.FORBIDDEN);
+      expect((error as { userMessage: string }).userMessage).toBe(
+        new ForbiddenError("Outside your institution").userMessage,
       );
     }
   });

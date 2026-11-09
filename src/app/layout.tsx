@@ -16,14 +16,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="bg-background min-h-full antialiased" suppressHydrationWarning>
+    <html
+      lang="en"
+      className="font-[arial] bg-background min-h-full antialiased"
+      suppressHydrationWarning
+    >
       <body className="min-h-full flex flex-col antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
+        <ThemeProvider defaultTheme="system" enableSystem disableTransitionOnChange>
           <TooltipProvider>
             <Toaster closeButton position="top-right" />
             {children}

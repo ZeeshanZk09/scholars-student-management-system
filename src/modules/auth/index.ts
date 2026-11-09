@@ -110,3 +110,11 @@ export function revokeSession(input: { sid: string; now: Date }) {
 
 /** Credential verification for callers that own their own flow (e.g. future MFA step-up). */
 export { hashPassword, verifyPassword };
+
+/**
+ * Password policy for callers that provision an account on someone else's behalf (Phase 7 task 15
+ * — guardian portal identity). The rules live with auth; a module that mints a credential asks
+ * them rather than restating "at least 12 characters" somewhere it can drift from.
+ */
+export { checkPassword, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./domain/password-policy";
+export type { PasswordIssue } from "./domain/password-policy";

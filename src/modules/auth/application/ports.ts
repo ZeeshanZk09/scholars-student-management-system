@@ -103,6 +103,13 @@ export interface AuthStore {
   /** Argon2id verification against `user_credentials`. False for missing/corrupt hashes. */
   verifyCredential(input: { userId: string; plaintext: string }): Promise<boolean>;
 
+  /**
+   * Verify a plaintext against a fixed, never-matching Argon2id hash — the unknown-email arm of
+   * `sign-in` spends the same work as a real verification so the two are indistinguishable by
+   * timing (`SECURITY.md` §62). The result is always discarded; the cost is the point.
+   */
+  verifyDummyCredential(plaintext: string): Promise<boolean>;
+
   /** Reset the failure counters and stamp `last_login_at`. */
   recordSuccessfulLogin(input: { userId: string; now: Date }): Promise<void>;
 

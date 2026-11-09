@@ -54,7 +54,10 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (userId) {
     await db.delete(users).where(eq(users.id, userId));
-    await db.$client.end();
+    // Deliberately *not* `db.$client.end()`. Playwright reuses one worker (and therefore one
+    // module instance and one pg pool) across spec files, so closing the pool here took down the
+    // next spec's `beforeAll` with "Cannot use a pool after calling end on the pool". The worker
+    // process owns the pool's lifetime; a spec only owns its own rows.
   }
 });
 

@@ -1,0 +1,1 @@
+ALTER TABLE "admissions" ALTER COLUMN "email" DROP NOT NULL;

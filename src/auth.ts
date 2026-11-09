@@ -51,10 +51,26 @@ const credentialsSchema = z.object({
   password: z.string().max(128),
 });
 
-/** Extract the client origin facts the store records on the session row. */
+/**
+ * The client origin facts the store records on the session row (and the rate-limit key derives).
+ *
+ * `x-forwarded-for` is an append-chain: a client can write it, and a proxy *appends* — so the
+ * leftmost hop is attacker-controlled. Only `x-real-ip` / `cf-connecting-ip` are *set* by the
+ * trusted proxy to the peer it actually saw. Prefer those; treat `x-forwarded-for` as a
+ * last resort for deployments that never see a real proxy IP.
+ */
 function originFrom(request: Request): { ipAddress: string | null; userAgent: string | null } {
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  const connectingIp = request.headers.get("cf-connecting-ip")?.trim();
   const forwarded = request.headers.get("x-forwarded-for");
-  const ipAddress = forwarded?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip") ?? null;
+  const hops = forwarded ? forwarded.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const fallbackForwarded = hops.length > 0 ? hops[hops.length - 1] ?? null : null;
+  const ipAddress =
+    realIp && realIp.length > 0
+      ? realIp
+      : connectingIp && connectingIp.length > 0
+        ? connectingIp
+        : fallbackForwarded;
   return { ipAddress, userAgent: request.headers.get("user-agent") };
 }
 

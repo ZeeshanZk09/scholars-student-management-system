@@ -38,14 +38,14 @@ export function AppSidebar({ groups }: Readonly<{ groups: readonly NavGroup[] }>
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
+      <SidebarHeader className="border-b">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
               isActive={pathname === "/"}
               render={<Link href="/" />}
-              className="gap-2 p-2 data-[active]:bg-transparent"
+              className="gap-2 p-2 data-active:bg-transparent"
             >
               <div className="flex size-6 items-center justify-center bg-primary text-primary-foreground">
                 <GraduationCap className="size-4" weight="bold" />
@@ -56,7 +56,7 @@ export function AppSidebar({ groups }: Readonly<{ groups: readonly NavGroup[] }>
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="sidebar-scrollbar">
         {groups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>

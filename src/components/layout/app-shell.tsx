@@ -35,10 +35,18 @@ export function AppShell({
 }: Readonly<AppShellProps>) {
   return (
     <SidebarProvider>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-xs focus:font-medium focus:text-primary-foreground focus:shadow-md focus:ring-2 focus:ring-ring focus:outline-none"
+      >
+        Skip to main content
+      </a>
       <AppSidebar groups={navGroups} />
       <SidebarInset>
         <AppHeader email={email} name={name} />
-        <div className="flex-1 px-4 py-5 pb-20 md:px-6 md:py-6 md:pb-6">{children}</div>
+        <main id="main-content" tabIndex={-1} className="flex-1 px-4 py-5 pb-20 md:px-6 md:py-6 md:pb-6 outline-none">
+          {children}
+        </main>
         <MobileBottomNav items={primaryItems} />
       </SidebarInset>
     </SidebarProvider>

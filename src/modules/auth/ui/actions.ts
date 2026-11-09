@@ -18,17 +18,24 @@ import { redirect } from "next/navigation";
 import { completePasswordReset, requestPasswordResetEmail } from "@/modules/auth";
 
 import { signOut } from "@/auth";
+import type { FormState } from "@/shared/forms";
 
-export type FormState =
-  | { readonly status: "idle" }
-  | { readonly status: "error"; readonly message: string; readonly issues?: readonly string[] }
-  | { readonly status: "done"; readonly message: string };
+export type { FormState };
 
 /** Client origin facts for rate-limit keys and session audit columns. */
 async function requestOrigin(): Promise<{ ipAddress: string | null; userAgent: string | null }> {
   const h = await headers();
+  const realIp = h.get("x-real-ip")?.trim();
+  const connectingIp = h.get("cf-connecting-ip")?.trim();
   const forwarded = h.get("x-forwarded-for");
-  const ipAddress = forwarded?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? null;
+  const hops = forwarded ? forwarded.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const fallbackForwarded = hops.length > 0 ? hops[hops.length - 1] ?? null : null;
+  const ipAddress =
+    realIp && realIp.length > 0
+      ? realIp
+      : connectingIp && connectingIp.length > 0
+        ? connectingIp
+        : fallbackForwarded;
   return { ipAddress, userAgent: h.get("user-agent") };
 }
 

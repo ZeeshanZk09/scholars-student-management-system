@@ -27,6 +27,18 @@ export const ARGON2ID_PARAMETERS = {
 } as const;
 
 /**
+ * A real Argon2id hash the application can verify against for equal cost, never a real account.
+ *
+ * `sign-in` must spend the same Argon2 work for an unknown email as for a known one, or a
+ * prober can tell the two apart by wall-clock time (`SECURITY.md` §62). There is no user row to
+ * verify against on that path, so the use case verifies against this fixed hash instead — the
+ * answer is discarded, only the Argon2 cost is shared. The plaintext above never leaves this
+ * file, and no account's hash will ever equal it.
+ */
+export const DUMMY_CREDENTIAL_HASH =
+  "$argon2id$v=19$m=65536,t=3,p=4$KVj++Jkvih3GTJo07HMavg$ctjcmjqpaelso9s/rUqYxlSELnOucmvdT6rHEhqPEws";
+
+/**
  * Hash a plaintext password for storage.
  *
  * @param plaintext - The password as provided. Never logged, never stored.

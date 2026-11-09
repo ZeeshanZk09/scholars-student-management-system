@@ -34,7 +34,6 @@ import {
 import {
   archivedAt,
   createdAt,
-  emailAddress,
   optionalPersonName,
   personName,
   phoneNumber,
@@ -84,8 +83,13 @@ export const admissions = pgTable(
     lastName: personName("last_name"),
     dateOfBirth: date("date_of_birth"),
     gender: genderEnum("gender"),
-    /** `nullable` + `optional`: an applicant may have no e-mail and apply in person. */
-    email: emailAddress("email"),
+    /**
+     * `nullable` + `optional`: an applicant may have no e-mail and apply in person. Deliberately
+     * **not** `emailAddress()` — that helper is `.notNull()` (right for `students.email`, whose
+     * address the institution issues with the account; wrong here, where no account exists yet and
+     * the PRD lists e-mail only as information that "may" be collected).
+     */
+    email: varchar("email", { length: 320 }),
     phone: phoneNumber(),
     address: varchar("address", { length: 500 }),
     slug: slug(120),

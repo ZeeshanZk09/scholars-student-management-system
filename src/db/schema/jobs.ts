@@ -345,7 +345,7 @@ export const jobRuns = pgTable(
     /** Structured JSON logs for the attempt, per `RULES.md` §52. */
     logLines:
       jsonb("log_lines").$type<
-        Array<{ level: string; message: string; at: string; data?: Record<string, unknown> }>
+        Array<{ level: string; message: string; at: string; data?: Record<string, unknown> | undefined }>
       >(),
     correlationId: varchar("correlation_id", { length: 96 }),
   },

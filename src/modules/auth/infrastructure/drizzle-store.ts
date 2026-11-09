@@ -32,7 +32,7 @@ import type {
 } from "../application/ports";
 import { initialExpiry, isSessionLive, nextExpiry, shouldRenew } from "../domain/session-policy";
 import { generateToken, hashToken } from "../domain/security-token";
-import { verifyPassword } from "./password";
+import { DUMMY_CREDENTIAL_HASH, verifyPassword } from "./password";
 
 /** Case-insensitive equality on the generated `lower(email)` index. */
 const emailEquals = (email: string) => sql`lower(${users.email}) = lower(${email})`;
@@ -90,6 +90,13 @@ export const drizzleAuthStore: AuthStore = {
       plaintext,
       hash !== null && hash !== undefined && hash !== "" ? { passwordHash: hash } : null,
     );
+  },
+
+  // The unknown-email path in `sign-in` has no `user_credentials` row to verify against, but it
+  // must spend the same Argon2 work anyway (timing side-channel, `SECURITY.md` §62). Verify the
+  // attempt against the fixed dummy hash; the boolean is promptly discarded.
+  async verifyDummyCredential(plaintext) {
+    return verifyPassword(plaintext, { passwordHash: DUMMY_CREDENTIAL_HASH });
   },
 
   async recordSuccessfulLogin({ userId, now }) {

@@ -12,9 +12,13 @@
  *   mechanism (`RULES.md` §19); every route these items point to is still guarded server-side by
  *   `requireUserPermission`. If this filter were bypassed tomorrow, a student would *see* a link
  *   but still be denied by the page.
- * - `disabled` marks a target whose page ships in a later phase. It renders inert with a "Planned"
- *   badge instead of a 404. The flag is flipped off when the backing phase lands — the seam each
- *   subsequent phase uses to reveal its feature.
+ * - `disabled` marks a target whose route does not exist *yet*. It renders inert with a
+ *   "Planned" badge instead of a 404, and the mobile bottom bar — which renders only enabled
+ *   items — never links to it. The flag is a **claim about the file system**: `true` means there
+ *   is no `page.tsx` behind the href, `false`/absent means there is one, however partial. Keeping
+ *   the two in step is the whole job of the flag, and it is exactly what `navigation.test.ts` and
+ *   a link check are for; a `disabled: false` entry with no route is a dead link in the sidebar
+ *   and in the bottom bar, and a `disabled: true` entry with a route hides a page that is live.
  */
 import type { ComponentType } from "react";
 import {
@@ -24,6 +28,7 @@ import {
   BooksIcon,
   BrainIcon,
   BuildingIcon,
+  BuildingApartmentIcon,
   BuildingsIcon,
   CalendarBlankIcon,
   ChartBarIcon,
@@ -63,10 +68,14 @@ export interface NavItem {
   readonly icon: NavIcon;
   /**
    * The capability that gates this item. `undefined` = visible to any authenticated principal
-   * (there is no permission key for it in the 27-key vocabulary). See module note.
+   * (there is no permission key for it in the `PERMISSION_KEYS` vocabulary). See module note.
    */
   readonly permission?: PermissionKey;
-  /** True until the backing page ships in a later phase — inert, rendered with a "Planned" badge. */
+  /**
+   * `true` while there is no `page.tsx` behind {@link href} — inert, with a "Planned" badge, so a
+   * menu never offers a route that 404s. Absent/`false` means the route exists. `navigation.test.ts`
+   * asserts the flag against the file system so the two cannot drift.
+   */
   readonly disabled?: boolean;
 }
 
@@ -92,12 +101,18 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "Academic",
     items: [
       {
-        href: "/students",
+        label: "Institution",
+        href: "/academics",
+        description: "Institution configuration and acting institution resolution",
+        icon: BuildingApartmentIcon,
+        permission: "academic.manage",
+      },
+      {
         label: "Students",
+        href: "/students",
         description: "Enrolled students and their records",
         icon: StudentIcon,
         permission: "students.view",
-        disabled: true,
       },
       {
         href: "/academics/classes",
@@ -105,15 +120,13 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Classes, sections and academic levels",
         icon: ChalkboardTeacherIcon,
         permission: "academic.manage",
-        disabled: true,
       },
       {
-        href: "/academics/years",
-        label: "Academic Years",
+        href: "/academics/sessions",
+        label: "Sessions",
         description: "Session calendar and promotion timeline",
         icon: CalendarBlankIcon,
         permission: "academic.manage",
-        disabled: true,
       },
       {
         href: "/academics/groups",
@@ -121,7 +134,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Groups within sections",
         icon: UsersIcon,
         permission: "academic.manage",
-        disabled: true,
       },
       {
         href: "/academics/subjects",
@@ -129,7 +141,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Subjects taught across the institution",
         icon: BooksIcon,
         permission: "academic.manage",
-        disabled: true,
       },
       {
         href: "/academics/departments",
@@ -137,15 +148,13 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Academic departments and designations",
         icon: BuildingIcon,
         permission: "academic.manage",
-        disabled: true,
       },
       {
         href: "/academics/facilities",
-        label: "BuildingsIcon & Floors",
+        label: "Buildings & Floors",
         description: "Facility map used by attendance",
         icon: BuildingsIcon,
         permission: "academic.manage",
-        disabled: true,
       },
       {
         href: "/academics/time-slots",
@@ -153,7 +162,13 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Timetable slots and periods",
         icon: ClockIcon,
         permission: "academic.manage",
-        disabled: true,
+      },
+      {
+        href: "/teachers",
+        label: "Teachers",
+        description: "Teaching staff profiles, subjects and assignments",
+        icon: ChalkboardTeacherIcon,
+        permission: "academic.manage",
       },
     ],
   },
@@ -166,7 +181,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Enquiry to enrolment pipeline",
         icon: GraduationCapIcon,
         permission: "admissions.view",
-        disabled: true,
       },
       {
         href: "/guardians",
@@ -174,7 +188,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Parent and guardian contacts",
         icon: UsersThreeIcon,
         permission: "guardians.view",
-        disabled: true,
       },
     ],
   },
@@ -182,12 +195,18 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "Operations",
     items: [
       {
+        href: "/teacher-portal",
+        label: "Teacher Portal",
+        description: "Teacher workbench — classes, subjects and registers",
+        icon: ChalkboardTeacherIcon,
+        permission: "attendance.view",
+      },
+      {
         href: "/attendance",
         label: "Attendance",
         description: "Daily attendance and registers",
         icon: ClipboardTextIcon,
         permission: "attendance.view",
-        disabled: true,
       },
       {
         href: "/floor-operations",
@@ -236,35 +255,51 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "Finance",
     items: [
       {
+        href: "/finance",
+        label: "Overview",
+        description: "Ledger summary and recent movements",
+        icon: ChartBarIcon,
+        permission: "finance.view",
+        disabled: false,
+      },
+      {
         href: "/fees",
         label: "Fees",
         description: "Fee structures and collections",
         icon: MoneyIcon,
         permission: "fees.view",
-        disabled: true,
+        disabled: false,
       },
       {
         href: "/finance/transactions",
         label: "Transactions",
         description: "Payment and receipt register",
         icon: ArrowsLeftRightIcon,
-        permission: "fees.view",
-        disabled: true,
+        permission: "finance.view",
+        disabled: false,
       },
       {
         href: "/finance/expenses",
         label: "Expenses",
         description: "School expenditure",
         icon: ReceiptIcon,
-        permission: "fees.view",
-        disabled: true,
+        permission: "finance.view",
+        disabled: false,
       },
       {
         href: "/finance/payroll",
         label: "Payroll",
         description: "Staff salary processing",
         icon: BankIcon,
-        disabled: true,
+        permission: "payroll.view",
+      },
+      {
+        href: "/accountant",
+        label: "Accountant Portal",
+        description: "Finance workbench — attention, collection and reports",
+        icon: SquaresFourIcon,
+        permission: "finance.view",
+        disabled: false,
       },
     ],
   },
@@ -276,7 +311,14 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         label: "Employees",
         description: "Staff records and contracts",
         icon: UserListIcon,
-        disabled: true,
+        permission: "employees.view",
+      },
+      {
+        href: "/hr/salary-structures",
+        label: "Salary",
+        description: "Salary structures and effective dates",
+        icon: MoneyIcon,
+        permission: "employees.view",
       },
       {
         href: "/hr/leave",
@@ -323,7 +365,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Fee, payment and expense summaries",
         icon: ChartLineIcon,
         permission: "reports.view",
-        disabled: true,
+        disabled: false,
       },
     ],
   },
@@ -352,7 +394,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Institution configuration",
         icon: BrainIcon,
         permission: "settings.manage",
-        disabled: true,
+        disabled: false,
       },
       {
         href: "/admin/audit",
@@ -360,7 +402,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         description: "Immutable audit log",
         icon: ScrollIcon,
         permission: "audit.view",
-        disabled: true,
+        disabled: false,
       },
     ],
   },

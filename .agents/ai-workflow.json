@@ -1,0 +1,207 @@
+{
+  "project": "Scholars Student Management System",
+  "version": "1.0",
+  "contextHierarchy": {
+    "level1": "Project Instructions (AGENTS.md, .opencode/)",
+    "level2": "Product Requirements (PRD.md)",
+    "level3": "Architecture (ARCHITECTURE.md)",
+    "level4": "Technology Stack (TECH-STACK.md)",
+    "level5": "Security (SECURITY.md, RULES.md)",
+    "level6": "UI/UX + Design System (DESIGN.md, MOBILE-FIRST-DESIGN-AND-PRINCIPLE-GUIDE.md)",
+    "level7": "Development Rules (RULES.md, SOPs.md)",
+    "level8": "Current Phase Documentation",
+    "level9": "Existing Implementation (src/)",
+    "level10": "Requested Change"
+  },
+  "executionWorkflow": {
+    "steps": [
+      "1. Understand Request",
+      "2. Identify Current Phase",
+      "3. Read Relevant Documentation (per hierarchy)",
+      "4. Inspect Existing Implementation",
+      "5. Identify Dependencies / Impact",
+      "6. Plan Change",
+      "7. Implement",
+      "8. Validate (typecheck, lint, tests)",
+      "9. Test",
+      "10. Review Against Rules",
+      "11. Report Changes"
+    ],
+    "prohibitedInitialActions": [
+      "Do not immediately start coding",
+      "Do not assume isolated user request overrides project architecture",
+      "Do not install packages without checking existing dependencies",
+      "Do not modify production code or database schema"
+    ]
+  },
+  "changeSafetyRules": {
+    "beforeModification": {
+      "identify": [
+        "Files that will change",
+        "Modules affected",
+        "Database impact",
+        "API/server-action impact",
+        "Authentication/RBAC impact",
+        "UI impact",
+        "Dependency impact",
+        "Migration impact",
+        "Testing impact"
+      ]
+    },
+    "duringModification": {
+      "require": [
+        "avoid unnecessary refactoring",
+        "avoid unrelated changes",
+        "preserve existing functionality",
+        "follow module boundaries",
+        "reuse existing utilities",
+        "avoid duplicated logic",
+        "avoid inventing new patterns when approved pattern exists"
+      ]
+    },
+    "afterModification": {
+      "run": [
+        "type checks",
+        "lint",
+        "tests",
+        "build",
+        "database validation",
+        "migration validation",
+        "UI checks where applicable"
+      ]
+    }
+  },
+  "dependencyDiscipline": {
+    "beforeAddingDependency": [
+      "Check whether existing dependency already solves the problem",
+      "Check whether native platform/framework already supports the requirement",
+      "Check approved Tech Stack document",
+      "Check whether dependency conflicts with architecture",
+      "Check package maintenance and compatibility"
+    ],
+    "flagForApproval": [
+        "changing core architecture",
+        "replacing major technologies",
+        "adding unapproved external services",
+        "adding significant dependencies",
+        "destructive database operations",
+        "deleting important functionality",
+        "changing security model",
+        "changing RBAC model",
+        "changing product requirements",
+        "changing the project roadmap",
+        "modifying production infrastructure",
+        "exposing secrets",
+        "making irreversible changes"
+    ]
+  },
+  "uiDevelopmentWorkflow": {
+    "require": [
+      "use approved shadcn/ui components",
+      "use approved UI blocks/patterns",
+      "follow the project's design system",
+      "preserve terminology (Class → Group → Section)",
+      "use explicit labels",
+      "avoid ambiguous icons",
+      "avoid unnecessary animations",
+      "avoid decorative UI that reduces clarity",
+      "avoid excessive cards",
+      "avoid unnecessarily complex dashboards",
+      "maintain mobile-first behavior",
+      "preserve accessibility",
+      "keep actions obvious"
+    ],
+    "avoid": [
+      "visually impressive interface at the cost of usability",
+      "random decoration",
+      "gradients/shadows/animations without UX purpose",
+      "hover-only animations on mobile"
+    ]
+  },
+  "databaseWorkflow": {
+    "steps": [
+      "Requirement",
+      "Schema Impact Analysis",
+      "Existing Schema Inspection (src/db/schema/index.ts)",
+      "Migration Plan",
+      "Schema Change (pgTable definitions in TypeScript)",
+      "pnpm db:generate (writes drizzle/ migration SQL)",
+      "Commit the generated drizzle/ migration with the schema change",
+      "Apply (pnpm db:migrate)",
+      "Validation (pnpm db:check, migration review)",
+      "Relevant Tests"
+    ],
+    "drizzleNotes": [
+      "The schema is hand-written TypeScript in src/db/schema/index.ts using pgTable. There is no schema DSL file and no generated client.",
+      "`pnpm db:generate` turns schema changes into drizzle/ migration SQL. It never touches the database; `pnpm db:check` validates migration files and also never connects.",
+      "Everything under drizzle/ is generated output — never hand-edit it.",
+      "There is NO schema-drift gate: nothing can verify a live database matches the schema. Shipping a generated migration alongside every schema edit is the compensating control, so do not skip it.",
+      "Only `pnpm db:migrate` may be applied to a real database. `pnpm db:push` bypasses migration history and is for local throwaway experiments only."
+    ],
+    "forbid": [
+      "directly manipulate production data",
+      "silently delete existing records",
+      "create destructive migrations without explicit approval",
+      "bypass Drizzle conventions",
+      "duplicate database logic across modules"
+    ]
+  },
+  "securityWorkflow": "Before implementing security-sensitive functionality, AI must inspect: authentication, authorization, RBAC, session handling, input validation, server-side authorization, database access, file uploads, sensitive data, audit logging, rate limiting. Never rely on UI-level restrictions as the security boundary.",
+  "testingWorkflow": "AI-generated changes must be validated according to project's testing standards. Determine whether change requires: unit tests, integration tests, database tests, server-action tests, component tests, E2E tests. For critical workflows (login, student creation, student editing, attendance, fee/payment operations, role permissions, reports), prefer end-to-end coverage where appropriate.",
+  "humanApprovalBoundaries": {
+    "aiCanDoAutomatically": [
+      "inspect code",
+      "analyze dependencies",
+      "implement approved requirements",
+      "refactor within scope",
+      "create tests",
+      "fix lint/type errors",
+      "improve existing implementation",
+      "run validation",
+      "perform non-destructive local operations"
+    ],
+    "aiMustAskHumanApproval": [
+      "changing core architecture",
+      "replacing major technologies",
+      "adding unapproved external services",
+      "adding significant dependencies",
+      "destructive database operations",
+      "deleting important functionality",
+      "changing security model",
+      "changing RBAC model",
+      "changing product requirements",
+      "changing the project roadmap",
+      "modifying production infrastructure",
+      "exposing secrets",
+      "making irreversible changes"
+    ]
+  },
+  "approvedTechStack": {
+    "language": "TypeScript",
+    "framework": "Next.js 16.x (App Router)",
+    "ui": "React, Tailwind CSS v4, shadcn/ui (base-lyra style, Base UI primitives)",
+    "icons": "@phosphor-icons/react",
+    "forms": "React Hook Form, Zod v4",
+    "orm": "Drizzle ORM (drizzle-orm + drizzle-kit + pg), hand-written schema",
+    "database": "PostgreSQL",
+    "tables": "TanStack Table",
+    "charts": "Recharts",
+    "date": "date-fns",
+    "state": "Server Components primary, Zustand only where required",
+    "auth": "Auth.js (NextAuth v5) + Drizzle adapter — selected and approved by the user 2026-10-06 (install approved). Not yet installed; no other auth package is approved.",
+    "testing": "Vitest + Playwright",
+    "packageManager": "pnpm",
+    "mobileWrapper": "PLANNED — Capacitor is not installed yet."
+  },
+  "mobileFirstRules": {
+    "breakpointPhilosophy": "breakpoints based on content requirements, not device names",
+    "touchTargets": "44-48 CSS pixels minimum",
+    "navigation": "mobile-first, expand for desktop",
+    "forms": "vertical structure on mobile, avoid multi-column",
+    "tables": "responsive strategy required (cards, scrolling, priority columns)",
+    "primaryAction": "clear primary action per screen",
+    "noFixedDesktopWidth": "pages should not depend on fixed desktop canvas",
+    "informationDensity": "mobile prioritizes useful over dense"
+  },
+  "statusVocabulary": ["PLANNED", "READY", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "COMPLETED", "DEFERRED"]
+}

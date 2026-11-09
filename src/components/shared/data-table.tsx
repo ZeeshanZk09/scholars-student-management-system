@@ -106,15 +106,25 @@ export function DataTable<TData extends RowData>({
                 const canSort = header.column.getCanSort();
                 const sorted = header.column.getIsSorted();
                 return (
-                  <TableHead key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    scope="col"
+                    aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
+                  >
                     {header.isPlaceholder ? null : canSort ? (
                       <button
                         type="button"
                         onClick={() => header.column.toggleSorting()}
-                        aria-label={sorted ? "Remove sort" : "Sort"}
                         className="inline-flex items-center gap-1.5 font-medium outline-none focus-visible:ring-2"
                       >
                         <table.FlexRender header={header} />
+                        <span className="sr-only">
+                          {sorted === "asc"
+                            ? "(sorted ascending, click to sort descending)"
+                            : sorted === "desc"
+                              ? "(sorted descending, click to remove sort)"
+                              : "(click to sort)"}
+                        </span>
                         {sorted === "asc" ? (
                           <CaretUpIcon aria-hidden="true" className="size-3.5" />
                         ) : sorted === "desc" ? (

@@ -105,6 +105,11 @@ export function fakeAuthStore(): FakeAuthStore {
       return store.credentials.get(userId) === plaintext;
     },
 
+    async verifyDummyCredential() {
+      // The real store burns 64 MiB of Argon2 here; a fake never matches and has no work cost.
+      return false;
+    },
+
     async recordSuccessfulLogin({ userId, now }) {
       store.recorded.successLogins.push({ userId, now });
       const user = store.users.get(userId);

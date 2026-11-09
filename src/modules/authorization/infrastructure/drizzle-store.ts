@@ -16,7 +16,14 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { permissions, rolePermissions, roles, userPermissions, userRoles } from "@/db/schema";
+import {
+  permissions,
+  rolePermissions,
+  roles,
+  userInstitutions,
+  userPermissions,
+  userRoles,
+} from "@/db/schema";
 import { isPermissionKey } from "@/shared/authorization";
 
 import type { AuthorizationStore } from "../application/ports";
@@ -73,5 +80,16 @@ export const drizzleAuthorizationStore: AuthorizationStore = {
     }
 
     return { roleGrants, directGrants };
+  },
+
+  async listUserInstitutions({ userId }) {
+    const rows = await db
+      .select({ institutionId: userInstitutions.institutionId })
+      .from(userInstitutions)
+      .where(eq(userInstitutions.userId, userId));
+
+    // `createdAt` is not part of the projection: callers only ever test membership or count, and
+    // an unspecified-but-stable order keeps a fake and a real store indistinguishable in tests.
+    return rows.map((row) => row.institutionId).sort();
   },
 };
